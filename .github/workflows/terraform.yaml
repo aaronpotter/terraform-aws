@@ -16,14 +16,12 @@ on:
       - main
     paths:
       - "**"
-      - .github/workflows/terraform.yaml
   push:
     branches:
       - main
     paths:
       - "**"
-      - .github/workflows/terraform.yaml
-
+    
 env:
   AWS_DEFAULT_REGION: us-east-2
 
