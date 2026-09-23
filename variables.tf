@@ -25,7 +25,7 @@ variable "public_subnet_cidr" {
 variable "key_name" {
   description = "Name of an existing EC2 key pair to attach to the instance."
   type        = string
-  default     = "apotter_aws"
+  default     = "apotter"
 }
 
 variable "ssh_cidr" {
