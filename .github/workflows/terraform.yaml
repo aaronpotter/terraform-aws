@@ -1,0 +1,114 @@
+name: "Terraform Multi-Environment Pipeline"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Select the environment to deploy'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - production
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**"
+      - .github/workflows/terraform.yaml
+  push:
+    branches:
+      - main
+    paths:
+      - "**"
+      - .github/workflows/terraform.yaml
+
+env:
+  AWS_DEFAULT_REGION: us-east-2
+
+jobs:
+  # ------------------------------------------------------------------
+  # Job 1: Terraform Plan (Runs on Pull Requests & Pushes)
+  # ------------------------------------------------------------------
+  plan:
+    name: "Terraform Plan"
+    runs-on: ubuntu-latest
+    # Secrets and variables live in GitHub environments; the job must declare one to read them.
+    # Pushes to main plan production (the plan the apply job uses); PRs and other refs plan development.
+    # Keep both expressions identical: the env context isn't available on the environment key.
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+
+    env:
+      ENV_NAME: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.16.4"
+
+      - name: Terraform Init
+        run: terraform init -input=false -backend-config=environments/${{ env.ENV_NAME }}/backend.tfvars
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Terraform Plan
+        run: terraform plan -input=false -no-color -var-file=environments/${{ env.ENV_NAME }}/terraform.tfvars -out=tfplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # Kept out of the committed tfvars so an address never lands in the repo.
+          TF_VAR_ssh_cidr: ${{ vars.SSH_CIDR }}
+
+      # The apply job applies exactly this file. It can hold variable values in
+      # plain text, so keep retention short.
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ env.ENV_NAME }}
+          path: tfplan
+          retention-days: 5
+
+  # ------------------------------------------------------------------
+  # Job 2: Production Apply (Runs ONLY when merged to main)
+  # ------------------------------------------------------------------
+  apply-production:
+    name: "Terraform Apply - Production"
+    needs: plan
+    # Only run on pushes (merges) to the main branch
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production # Uses GitHub Environment protection rules
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.16.4"
+
+      - name: Terraform Init
+        run: terraform init -input=false -backend-config=environments/production/backend.tfvars
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Download Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-production
+
+      # A saved plan carries its own variables and needs no approval flag.
+      # Terraform refuses it if state changed since the plan was made.
+      - name: Terraform Apply
+        run: terraform apply -input=false tfplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

@@ -1,6 +1,6 @@
 output "vpc_id" {
   description = "ID of the VPC the instance runs in."
-  value       = data.aws_vpc.existing.id
+  value       = aws_vpc.main.id
 }
 
 output "instance_subnet_id" {

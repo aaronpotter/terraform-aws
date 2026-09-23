@@ -10,16 +10,16 @@ variable "instance_type" {
   default     = "t3.micro"
 }
 
-variable "vpc_id" {
-  description = "ID of the existing VPC to launch into."
+variable "vpc_cidr" {
+  description = "CIDR block for the new VPC."
   type        = string
-  default     = "vpc-226c4447"
+  default     = "10.0.0.0/16"
 }
 
-variable "subnet_id" {
-  description = "ID of the existing subnet to launch the instance in. Must belong to var.vpc_id."
+variable "public_subnet_cidr" {
+  description = "CIDR block for the public subnet the instance runs in. Must fall inside var.vpc_cidr."
   type        = string
-  default     = "subnet-1021f959"
+  default     = "10.0.1.0/24"
 }
 
 variable "key_name" {
