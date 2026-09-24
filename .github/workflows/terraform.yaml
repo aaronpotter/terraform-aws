@@ -11,16 +11,19 @@ on:
         options:
           - development
           - production
+  # The EKS dev cluster has its own root module, state, and workflow.
   pull_request:
     branches:
       - main
-    paths:
-      - "**"
+    paths-ignore:
+      - "eks-dev/**"
+      - ".github/workflows/terraform-eks-dev.yaml"
   push:
     branches:
       - main
-    paths:
-      - "**"
+    paths-ignore:
+      - "eks-dev/**"
+      - ".github/workflows/terraform-eks-dev.yaml"
     
 env:
   AWS_DEFAULT_REGION: us-east-2
