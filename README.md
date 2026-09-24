@@ -20,9 +20,11 @@ The bucket name and region in `bootstrap/variables.tf` must match the `backend "
 
 ## Dev EKS cluster (`eks-dev/`)
 
-A managed EKS cluster named `apotterlab`: one on-demand t3.medium node in public subnets of its own VPC (10.2.0.0/16). It is a separate root module with its own state key (`environments/eks-dev/terraform.tfstate`) and its own workflow, `.github/workflows/terraform-eks-dev.yaml`.
+A managed EKS cluster named `apotterlab`: one on-demand t3.small node in public subnets of its own VPC (10.2.0.0/16). It is a separate root module with its own state key (`environments/eks-dev/terraform.tfstate`) and its own workflow, `.github/workflows/terraform-eks-dev.yaml`.
 
-**Cost:** about $3.60/day (~$110/month) while it exists, mostly the $0.10/hr EKS control plane. Destroy it when you're not using it.
+**Node size:** this AWS account is on the Free plan, which only launches free-tier-eligible instance types. Any other type fails with `InvalidParameterCombination`, and the node group sits in `CREATING` until Terraform times out. t3.small (2 GiB, up to 11 pods, 4 of them used by system pods) is the smallest workable choice. For more headroom, `c7i-flex.large` (4 GiB, 29 pods) is also eligible.
+
+**Cost:** about $3.10/day (~$93/month) while it exists, mostly the $0.10/hr EKS control plane. On the Free plan that comes out of your credits, and AWS closes the account when they run out unless you upgrade to a paid plan. Destroy the cluster when you're not using it.
 
 ### Locally
 

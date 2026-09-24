@@ -44,9 +44,9 @@ variable "cluster_admin_arns" {
 }
 
 variable "node_instance_type" {
-  description = "Instance type for the managed node group."
+  description = "Instance type for the managed node group. This account is on the AWS Free plan, which only launches free-tier-eligible types."
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
 }
 
 variable "node_desired_size" {
