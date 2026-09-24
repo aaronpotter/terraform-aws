@@ -9,7 +9,7 @@ The state bucket is created by `bootstrap/`, which keeps its own state locally.
 ```sh
 cd bootstrap
 terraform init
-terraform apply        # creates apotter-tfstate-us-east-2
+terraform apply        # creates tfstate bucket
 
 cd ..
 terraform init         # uses the S3 backend in terraform.tf
