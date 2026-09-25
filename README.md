@@ -71,7 +71,13 @@ terraform providers lock -platform=darwin_arm64 -platform=linux_amd64
 
 ## Account guardrails (`account/`)
 
-Account-level controls: currently the CloudTrail trail (`account-trail`, all regions, log file validation) and its log bucket `apotter-cloudtrail-549610932637`. It's a separate root module with state key `account/terraform.tfstate`.
+Account-level controls, in a separate root module with state key `account/terraform.tfstate`:
+
+- **CloudTrail:** trail `account-trail` (all regions, log file validation) and its log bucket `apotter-cloudtrail-549610932637`.
+- **GitHub OIDC** (`github_oidc.tf`): CI gets short-lived credentials by assuming a role, not from a stored key.
+  - `terraform-plan` has `ReadOnlyAccess` plus state-lock writes. It trusts the `production-plan` and `eks-dev` environments.
+  - `terraform-apply` has `AdministratorAccess`, minus a self-protection deny. It can't touch these roles, the OIDC provider, the `Admins`/`Engineers` groups, human credentials, the trail, or the state and trail buckets. It trusts the `production` and `eks-dev-apply` environments, which only deploy from `main`.
+  - The trust policies match GitHub's immutable subject format, `repo:aaronpotter@9371584/terraform-aws@1340975248:environment:<env>`. If a token is rejected, CloudTrail's denied `AssumeRoleWithWebIdentity` event shows the `sub` that was actually sent.
 
 **CI never applies this module**, and `terraform.yaml` ignores `account/**`. A human applies it after review, so a merged PR can't weaken the guardrails:
 
