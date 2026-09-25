@@ -9,3 +9,15 @@ variable "region" {
   type        = string
   default     = "us-east-2"
 }
+
+variable "lock_writer_arns" {
+  description = "Extra principals allowed to take the state lock (run terraform plan locally) without being able to write state."
+  type        = list(string)
+  default     = ["arn:aws:iam::549610932637:user/apotter"]
+}
+
+variable "extra_state_writer_arns" {
+  description = "Extra principals allowed to write state directly. Empty on purpose: humans write state through break-glass."
+  type        = list(string)
+  default     = []
+}
