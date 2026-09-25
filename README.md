@@ -95,7 +95,8 @@ terraform providers lock -platform=darwin_arm64 -platform=linux_amd64
 `.github/workflows/terraform-drift.yaml` runs daily at 12:00 UTC, and on demand from `main`. It uses the `drift` environment, which is limited to `main` and assumes the read-only `terraform-plan` role. It runs `terraform plan -detailed-exitcode` for `production` and `eks-dev`.
 
 - **No changes:** the run passes.
-- **Changes** (something changed outside Terraform, or a merged change was never applied): the run fails, and a `drift` issue named `Drift detected: <stack>` is opened, or commented on if it's already open. Reconcile by putting the change in code or reverting it in AWS, then close the issue.
+- **Changes** (something changed outside Terraform, or a merged change hasn't been applied yet): the run fails, and a `drift` issue named `Drift detected: <stack>` is opened, or commented on if it's already open. Reconcile by applying the merged change, putting the manual change in code, or reverting it in AWS.
+- **The next clean run for that stack closes its open issue automatically,** with a comment linking the run.
 - The logs and the issue show only resource addresses and the plan summary. This repo's Actions logs are public, and full plans can contain values like the SSH CIDR.
 - `account/` and `bootstrap/` aren't checked. They're applied by hand, and `bootstrap/` keeps its state locally.
 - GitHub disables scheduled workflows in public repos after 60 days without activity. Re-enable it from the Actions tab if that happens.
