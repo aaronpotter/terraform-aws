@@ -115,7 +115,9 @@ Account-level controls, in a separate root module with state key `account/terraf
 - **Human access** (`humans.tf`):
   - `Engineers` group: `ReadOnlyAccess`, `IAMUserChangePassword`, `SignInLocalDevelopmentAccess` (for `aws login`), state-lock writes so a local `terraform plan` works, and `sts:AssumeRole` on the break-glass role.
   - `break-glass-admin`: `AdministratorAccess` that only `apotter` can assume, with MFA used within the last hour. Sessions last at most 1 hour.
-  - Break-glass alerts: EventBridge rules in `us-east-1` (console role switches) and `us-east-2` (CLI `AssumeRole`) publish to an SNS topic `break-glass-alerts` in each region, which emails `alert_email`. Each subscription must be confirmed once from its email.
+  - Alerts: in both `us-east-1` and `us-east-2`, EventBridge rules publish to an SNS topic `break-glass-alerts`, which emails `alert_email`. Each subscription must be confirmed once from its email.
+    - `break-glass-assumed` matches `sts:AssumeRole` of `break-glass-admin`. A console role switch records that event in `us-east-1`, and the CLI records it in `us-east-2`, so each use sends one email.
+    - `root-console-login` matches any root `ConsoleLogin`, whether it succeeds or fails. Sign-in events land in the region of the sign-in endpoint that was used, so a root sign-in through some other region's endpoint wouldn't alert.
 
 **CI never applies this module**, and neither workflow plans or applies `account/**`. A human applies it after review, so a merged PR can't weaken the guardrails.
 
