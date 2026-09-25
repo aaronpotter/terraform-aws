@@ -78,12 +78,57 @@ Account-level controls, in a separate root module with state key `account/terraf
   - `terraform-plan` has `ReadOnlyAccess` plus state-lock writes. It trusts the `production-plan` and `eks-dev` environments.
   - `terraform-apply` has `AdministratorAccess`, minus a self-protection deny. It can't touch these roles, the OIDC provider, the `Admins`/`Engineers` groups, human credentials, the trail, or the state and trail buckets. It trusts the `production` and `eks-dev-apply` environments, which only deploy from `main`.
   - The trust policies match GitHub's immutable subject format, `repo:aaronpotter@9371584/terraform-aws@1340975248:environment:<env>`. If a token is rejected, CloudTrail's denied `AssumeRoleWithWebIdentity` event shows the `sub` that was actually sent.
+- **Human access** (`humans.tf`):
+  - `Engineers` group: `ReadOnlyAccess`, `IAMUserChangePassword`, `SignInLocalDevelopmentAccess` (for `aws login`), state-lock writes so a local `terraform plan` works, and `sts:AssumeRole` on the break-glass role.
+  - `break-glass-admin`: `AdministratorAccess` that only `apotter` can assume, with MFA used within the last hour. Sessions last at most 1 hour.
+  - Break-glass alerts: EventBridge rules in `us-east-1` (console role switches) and `us-east-2` (CLI `AssumeRole`) publish to an SNS topic `break-glass-alerts` in each region, which emails `alert_email`. Each subscription must be confirmed once from its email.
 
-**CI never applies this module**, and `terraform.yaml` ignores `account/**`. A human applies it after review, so a merged PR can't weaken the guardrails:
+**CI never applies this module**, and neither workflow plans or applies `account/**`. A human applies it after review, so a merged PR can't weaken the guardrails.
+
+The alert email is set in the git-ignored `account/local.auto.tfvars`, which Terraform loads automatically, so the address stays out of this public repo:
+
+```hcl
+alert_email = "you@example.com"
+```
+
+### Local credentials
+
+Humans use `aws login`, which gives short-lived credentials with no access keys. The pinned AWS provider can't read `aws login` credentials directly, so add these profiles to `~/.aws/config`:
+
+```ini
+# Read-only, for terraform plan. --profile default is required, or the inner aws call loops on AWS_PROFILE.
+[profile terraform]
+credential_process = aws configure export-credentials --profile default --format process
+region = us-east-2
+
+# Emergency admin. Prompts for an MFA code and triggers an alert email.
+[profile break-glass]
+role_arn         = arn:aws:iam::549610932637:role/break-glass-admin
+source_profile   = terraform
+mfa_serial       = arn:aws:iam::549610932637:mfa/apotter
+duration_seconds = 3600
+region           = us-east-2
+```
+
+Terraform can't prompt for an MFA code or read the CLI's cache of assumed-role credentials. To use break-glass, let the CLI assume the role (it prompts for the code) and export the session into the shell:
 
 ```sh
+aws login
 cd account
 terraform init
-terraform plan -out=account.tfplan
-terraform apply account.tfplan
+AWS_PROFILE=terraform terraform plan -out=account.tfplan    # read-only is enough to plan
+
+# applying needs admin: assume break-glass (MFA prompt, sends an alert), then apply the saved plan
+( eval "$(aws configure export-credentials --profile break-glass --format env)"; terraform apply account.tfplan )
 ```
+
+The subshell keeps the admin session out of your main shell, and it expires within an hour anyway.
+
+### Switching a person to read-only (one time, in this order)
+
+1. Apply `account/`, then click the confirmation link in both alert-subscription emails.
+2. Test break-glass from the console (switch role to `break-glass-admin`) and from the CLI (`aws sts get-caller-identity --profile break-glass`). Confirm an alert email arrives for each.
+3. Confirm `AWS_PROFILE=terraform terraform plan` works.
+4. `aws iam add-user-to-group --group-name Engineers --user-name apotter`, **then** `aws iam remove-user-from-group --group-name Admins --user-name apotter`.
+
+If anything goes wrong, the root user (MFA on) can fix IAM.

@@ -45,3 +45,19 @@ variable "github_repo_id" {
   type        = string
   default     = "1340975248"
 }
+
+variable "break_glass_user_arns" {
+  description = "IAM users allowed to assume break-glass-admin (with MFA)."
+  type        = list(string)
+  default     = ["arn:aws:iam::549610932637:user/apotter"]
+}
+
+variable "alert_email" {
+  description = "Email for break-glass alerts. No default: this repo is public, so set it in the git-ignored account/local.auto.tfvars."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alert_email))
+    error_message = "alert_email must be an email address."
+  }
+}
