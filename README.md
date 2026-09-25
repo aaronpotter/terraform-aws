@@ -24,6 +24,21 @@ Production is the only environment for the root module. CI applies it when chang
 
 `main` is protected by a ruleset: every change needs a pull request, and the `Main Plan` and `EKS Dev Plan` checks must pass. Each workflow's `Detect Changes` job skips its plan when the PR doesn't touch that workflow's files. A skipped plan still counts as passing, so docs-only PRs aren't blocked.
 
+## State bucket protection (`bootstrap/`)
+
+The state bucket's policy limits writes even for account admins. `aws:PrincipalArn` is checked against these lists:
+
+| Action | Allowed for |
+|---|---|
+| Write or delete `*.tfstate` | `terraform-apply` (CI), `break-glass-admin`, root |
+| Take or release the lock (`*.tflock`) | those three, plus `terraform-plan` and `user/apotter`, so a local `plan` works |
+| Delete object versions (the state history) | `break-glass-admin`, root |
+| Delete the bucket, or change its policy, versioning, lifecycle, encryption, or public access block | `break-glass-admin`, root |
+
+So a local `terraform apply` of `account/` or `eks-dev/` needs break-glass (see "Local credentials"). CI applies are unaffected. Root can always remove a bad bucket policy.
+
+`bootstrap/` keeps its own state locally (`bootstrap/terraform.tfstate`, git-ignored) because it creates the bucket. Applying it after this policy is in place also needs break-glass, since only `break-glass-admin` can change the bucket policy.
+
 ## Dev EKS cluster (`eks-dev/`)
 
 A managed EKS cluster named `apotterlab`: one on-demand t3.small node in public subnets of its own VPC (10.2.0.0/16). It is a separate root module with its own state key (`environments/eks-dev/terraform.tfstate`) and its own workflow, `.github/workflows/terraform-eks-dev.yaml`.
