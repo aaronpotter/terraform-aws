@@ -12,18 +12,13 @@ on:
         options:
           - plan
           - apply
+  # Path filtering happens in the changes job, not here (see below).
   pull_request:
     branches:
       - main
-    paths:
-      - "eks-dev/**"
-      - ".github/workflows/terraform-eks-dev.yaml"
   push:
     branches:
       - main
-    paths:
-      - "eks-dev/**"
-      - ".github/workflows/terraform-eks-dev.yaml"
 
 env:
   AWS_DEFAULT_REGION: us-east-2
@@ -35,10 +30,49 @@ concurrency:
 
 jobs:
   # ------------------------------------------------------------------
-  # Job 1: Plan (every trigger). Merges only ever plan.
+  # Job 0: Decide whether this workflow's plan is relevant.
+  # Filtering here instead of with on.paths keeps the plan check reporting on every
+  # PR: a job skipped by `if:` counts as passing for required status checks, while a
+  # workflow skipped by paths never reports and blocks the PR.
+  # ------------------------------------------------------------------
+  changes:
+    name: "Detect Changes"
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.filter.outputs.run }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Only eks-dev/ and this workflow affect the cluster.
+      - name: Filter Changed Paths
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE" "$HEAD")
+          echo "$changed"
+          if [ -n "$(echo "$changed" | grep -E '^(eks-dev/|\.github/workflows/terraform-eks-dev\.yaml$)')" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ------------------------------------------------------------------
+  # Job 1: Plan. Merges only ever plan.
   # ------------------------------------------------------------------
   plan:
     name: "EKS Dev Plan"
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     # Holds AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and the ADMIN_CIDR variable.
     # No required reviewers here: they would also block PR plans.
@@ -90,7 +124,9 @@ jobs:
     needs: plan
     if: github.event_name == 'workflow_dispatch' && inputs.action != 'plan'
     runs-on: ubuntu-latest
-    environment: eks-dev
+    # Deployable only from main (environment branch policy). eks-dev stays open to all
+    # branches because PR plans run on refs/pull/*.
+    environment: eks-dev-apply
     defaults:
       run:
         working-directory: eks-dev
