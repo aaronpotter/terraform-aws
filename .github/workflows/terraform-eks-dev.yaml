@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'plan only, or plan then apply / destroy the apotterlab cluster'
+        # No destroy: the VPC has prevent_destroy. Turn the cluster off with enabled = false in terraform.tfvars.
+        description: 'plan only, or plan then apply (enabled in terraform.tfvars turns the cluster on or off)'
         required: true
         default: 'plan'
         type: choice
         options:
           - plan
           - apply
-          - destroy
   pull_request:
     branches:
       - main
@@ -38,7 +38,7 @@ jobs:
   # Job 1: Plan (every trigger). Merges only ever plan.
   # ------------------------------------------------------------------
   plan:
-    name: "Terraform Plan"
+    name: "EKS Dev Plan"
     runs-on: ubuntu-latest
     # Holds AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and the ADMIN_CIDR variable.
     # No required reviewers here: they would also block PR plans.
@@ -71,7 +71,7 @@ jobs:
         run: terraform validate -no-color
 
       - name: Terraform Plan
-        run: terraform plan -input=false -no-color ${{ inputs.action == 'destroy' && '-destroy' || '' }} -out=tfplan
+        run: terraform plan -input=false -no-color -out=tfplan
 
       # The apply job applies exactly this file. It can hold variable values in
       # plain text, so keep retention short.
@@ -83,10 +83,10 @@ jobs:
           retention-days: 5
 
   # ------------------------------------------------------------------
-  # Job 2: Apply the saved plan (manual dispatch with apply or destroy only)
+  # Job 2: Apply the saved plan (manual dispatch with apply only)
   # ------------------------------------------------------------------
   apply:
-    name: "Terraform Apply (${{ inputs.action }})"
+    name: "Terraform Apply"
     needs: plan
     if: github.event_name == 'workflow_dispatch' && inputs.action != 'plan'
     runs-on: ubuntu-latest
@@ -117,7 +117,7 @@ jobs:
           name: tfplan-eks-dev
           path: eks-dev
 
-      # A saved plan carries its own variables (including -destroy) and needs no approval flag.
+      # A saved plan carries its own variables and needs no approval flag.
       # Terraform refuses it if state changed since the plan was made.
       - name: Terraform Apply
         run: terraform apply -input=false tfplan
