@@ -12,3 +12,6 @@
 *.tfplan
 tfplan
 bootstrap/tfplan
+
+# account/ is applied locally only; its local values (e.g. the alert email) stay out of this public repo
+account/local.auto.tfvars
