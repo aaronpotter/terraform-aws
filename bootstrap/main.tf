@@ -11,6 +11,24 @@ provider "aws" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
+locals {
+  iam = "arn:aws:iam::${data.aws_caller_identity.current.account_id}"
+
+  # Root is always exempt: it can recover from a bad bucket policy regardless.
+  root = "${local.iam}:root"
+
+  # Who may write state (*.tfstate). CI applies as terraform-apply; humans only via break-glass.
+  state_writers = concat(["${local.iam}:role/terraform-apply", "${local.iam}:role/break-glass-admin", local.root], var.extra_state_writer_arns)
+
+  # Who may take and release the state lock (*.tflock): the writers, plus anyone who runs plan.
+  lock_writers = concat(local.state_writers, ["${local.iam}:role/terraform-plan"], var.lock_writer_arns)
+
+  # Who may change the guardrails on this bucket or destroy history.
+  bucket_admins = ["${local.iam}:role/break-glass-admin", local.root]
+}
+
 resource "aws_s3_bucket" "tfstate" {
   bucket = var.state_bucket_name
 
@@ -72,6 +90,56 @@ resource "aws_s3_bucket_policy" "tfstate" {
         ]
         Condition = {
           Bool = { "aws:SecureTransport" = "false" }
+        }
+      },
+      {
+        # Even account admins can't overwrite or delete state without break-glass.
+        Sid       = "DenyStateWritesExceptAppliers"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["s3:PutObject", "s3:DeleteObject"]
+        Resource  = "${aws_s3_bucket.tfstate.arn}/*.tfstate"
+        Condition = {
+          ArnNotLike = { "aws:PrincipalArn" = local.state_writers }
+        }
+      },
+      {
+        Sid       = "DenyLockWritesExceptPlanners"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["s3:PutObject", "s3:DeleteObject"]
+        Resource  = "${aws_s3_bucket.tfstate.arn}/*.tflock"
+        Condition = {
+          ArnNotLike = { "aws:PrincipalArn" = local.lock_writers }
+        }
+      },
+      {
+        # Old versions are the recovery path for a bad state write; lifecycle expiry still applies.
+        Sid       = "DenyVersionDeletion"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["s3:DeleteObjectVersion"]
+        Resource  = "${aws_s3_bucket.tfstate.arn}/*"
+        Condition = {
+          ArnNotLike = { "aws:PrincipalArn" = local.bucket_admins }
+        }
+      },
+      {
+        Sid       = "DenyGuardrailChanges"
+        Effect    = "Deny"
+        Principal = "*"
+        Action = [
+          "s3:DeleteBucket",
+          "s3:PutBucketPolicy",
+          "s3:DeleteBucketPolicy",
+          "s3:PutBucketVersioning",
+          "s3:PutLifecycleConfiguration",
+          "s3:PutEncryptionConfiguration",
+          "s3:PutBucketPublicAccessBlock",
+        ]
+        Resource = aws_s3_bucket.tfstate.arn
+        Condition = {
+          ArnNotLike = { "aws:PrincipalArn" = local.bucket_admins }
         }
       },
     ]

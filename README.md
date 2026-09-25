@@ -24,9 +24,26 @@ Production is the only environment for the root module. CI applies it when chang
 
 `main` is protected by a ruleset: every change needs a pull request, and the `Main Plan` and `EKS Dev Plan` checks must pass. Each workflow's `Detect Changes` job skips its plan when the PR doesn't touch that workflow's files. A skipped plan still counts as passing, so docs-only PRs aren't blocked.
 
+
 ## Resource tags
 
 Every module's AWS provider sets `default_tags`, so every taggable resource carries `ManagedBy = terraform`, `Repo = aaronpotter/terraform-aws`, and `Stack` (`root`, `eks-dev`, `account`, or `bootstrap`). If you find a tagged resource in the console, change it in code, not by hand, or the nightly drift check will flag it (for `root` and `eks-dev`).
+=======
+## State bucket protection (`bootstrap/`)
+
+The state bucket's policy limits writes even for account admins. `aws:PrincipalArn` is checked against these lists:
+
+| Action | Allowed for |
+|---|---|
+| Write or delete `*.tfstate` | `terraform-apply` (CI), `break-glass-admin`, root |
+| Take or release the lock (`*.tflock`) | those three, plus `terraform-plan` and `user/apotter`, so a local `plan` works |
+| Delete object versions (the state history) | `break-glass-admin`, root |
+| Delete the bucket, or change its policy, versioning, lifecycle, encryption, or public access block | `break-glass-admin`, root |
+
+So a local `terraform apply` of `account/` or `eks-dev/` needs break-glass (see "Local credentials"). CI applies are unaffected. Root can always remove a bad bucket policy.
+
+`bootstrap/` keeps its own state locally (`bootstrap/terraform.tfstate`, git-ignored) because it creates the bucket. Applying it after this policy is in place also needs break-glass, since only `break-glass-admin` can change the bucket policy.
+
 
 ## Dev EKS cluster (`eks-dev/`)
 
@@ -73,13 +90,25 @@ CI runs on linux_amd64. After changing provider versions, refresh the hashes for
 terraform providers lock -platform=darwin_arm64 -platform=linux_amd64
 ```
 
+## Drift detection
+
+`.github/workflows/terraform-drift.yaml` runs daily at 12:00 UTC, and on demand from `main`. It uses the `drift` environment, which is limited to `main` and assumes the read-only `terraform-plan` role. It runs `terraform plan -detailed-exitcode` for `production` and `eks-dev`.
+
+- **No changes:** the run passes.
+- **Changes** (something changed outside Terraform, or a merged change was never applied): the run fails, and a `drift` issue named `Drift detected: <stack>` is opened, or commented on if it's already open. Reconcile by putting the change in code or reverting it in AWS, then close the issue.
+- The logs and the issue show only resource addresses and the plan summary. This repo's Actions logs are public, and full plans can contain values like the SSH CIDR.
+- `account/` and `bootstrap/` aren't checked. They're applied by hand, and `bootstrap/` keeps its state locally.
+- GitHub disables scheduled workflows in public repos after 60 days without activity. Re-enable it from the Actions tab if that happens.
+
+The `drift` environment holds `AWS_ROLE_ARN` (`terraform-plan`), `SSH_CIDR`, and `ADMIN_CIDR`.
+
 ## Account guardrails (`account/`)
 
 Account-level controls, in a separate root module with state key `account/terraform.tfstate`:
 
 - **CloudTrail:** trail `account-trail` (all regions, log file validation) and its log bucket `apotter-cloudtrail-549610932637`.
 - **GitHub OIDC** (`github_oidc.tf`): CI gets short-lived credentials by assuming a role, not from a stored key.
-  - `terraform-plan` has `ReadOnlyAccess` plus state-lock writes. It trusts the `production-plan` and `eks-dev` environments.
+  - `terraform-plan` has `ReadOnlyAccess` plus state-lock writes. It trusts the `production-plan`, `eks-dev`, and `drift` environments.
   - `terraform-apply` has `AdministratorAccess`, minus a self-protection deny. It can't touch these roles, the OIDC provider, the `Admins`/`Engineers` groups, human credentials, the trail, or the state and trail buckets. It trusts the `production` and `eks-dev-apply` environments, which only deploy from `main`.
   - The trust policies match GitHub's immutable subject format, `repo:aaronpotter@9371584/terraform-aws@1340975248:environment:<env>`. If a token is rejected, CloudTrail's denied `AssumeRoleWithWebIdentity` event shows the `sub` that was actually sent.
 - **Human access** (`humans.tf`):
