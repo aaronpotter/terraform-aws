@@ -15,6 +15,12 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
+  # Blocks a whole-module `terraform destroy`. Turn the cluster off with var.enabled instead;
+  # the VPC, subnets, and IAM roles cost nothing to keep.
+  lifecycle {
+    prevent_destroy = true
+  }
+
   tags = {
     Name = "${var.cluster_name}-vpc"
   }
@@ -115,6 +121,8 @@ resource "aws_iam_role_policy_attachment" "node" {
 # ------------------------------------------------------------------
 
 resource "aws_eks_cluster" "main" {
+  count = var.enabled ? 1 : 0
+
   name     = var.cluster_name
   version  = var.kubernetes_version
   role_arn = aws_iam_role.cluster.arn
@@ -133,26 +141,21 @@ resource "aws_eks_cluster" "main" {
     bootstrap_cluster_creator_admin_permissions = false
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
-
   # Keep the role's permissions until the cluster is gone on destroy.
   depends_on = [aws_iam_role_policy_attachment.cluster]
-
 }
 
 resource "aws_eks_access_entry" "admin" {
-  for_each = toset(var.cluster_admin_arns)
+  for_each = var.enabled ? toset(var.cluster_admin_arns) : toset([])
 
-  cluster_name  = aws_eks_cluster.main.name
+  cluster_name  = aws_eks_cluster.main[0].name
   principal_arn = each.value
 }
 
 resource "aws_eks_access_policy_association" "admin" {
   for_each = aws_eks_access_entry.admin
 
-  cluster_name  = aws_eks_cluster.main.name
+  cluster_name  = aws_eks_cluster.main[0].name
   principal_arn = each.value.principal_arn
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
 
@@ -162,7 +165,9 @@ resource "aws_eks_access_policy_association" "admin" {
 }
 
 resource "aws_eks_node_group" "main" {
-  cluster_name    = aws_eks_cluster.main.name
+  count = var.enabled ? 1 : 0
+
+  cluster_name    = aws_eks_cluster.main[0].name
   node_group_name = "${var.cluster_name}-default"
   node_role_arn   = aws_iam_role.node.arn
   subnet_ids      = aws_subnet.public[*].id
@@ -184,4 +189,15 @@ resource "aws_eks_node_group" "main" {
     aws_iam_role_policy_attachment.node,
     aws_route_table_association.public,
   ]
+}
+
+# The cluster and node group moved to count when var.enabled was added.
+moved {
+  from = aws_eks_cluster.main
+  to   = aws_eks_cluster.main[0]
+}
+
+moved {
+  from = aws_eks_node_group.main
+  to   = aws_eks_node_group.main[0]
 }

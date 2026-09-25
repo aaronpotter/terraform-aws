@@ -24,7 +24,7 @@ A managed EKS cluster named `apotterlab`: one on-demand t3.small node in public 
 
 **Node size:** this AWS account is on the Free plan, which only launches free-tier-eligible instance types. Any other type fails with `InvalidParameterCombination`, and the node group sits in `CREATING` until Terraform times out. t3.small (2 GiB, up to 11 pods, 4 of them used by system pods) is the smallest workable choice. For more headroom, `c7i-flex.large` (4 GiB, 29 pods) is also eligible.
 
-**Cost:** about $3.10/day (~$93/month) while it exists, mostly the $0.10/hr EKS control plane. On the Free plan that comes out of your credits, and AWS closes the account when they run out unless you upgrade to a paid plan. Destroy the cluster when you're not using it.
+**Cost:** about $3.10/day (~$93/month) while it exists, mostly the $0.10/hr EKS control plane. On the Free plan that comes out of your credits, and AWS closes the account when they run out unless you upgrade to a paid plan. Set `enabled = false` when you're not using it.
 
 ### Locally
 
@@ -35,19 +35,23 @@ terraform init
 terraform apply                          # ~15 minutes
 aws eks update-kubeconfig --region us-east-2 --name apotterlab
 kubectl get nodes
-
-terraform destroy                        # when done
 ```
+
+### Turning the cluster off and on
+
+`enabled` in `eks-dev/terraform.tfvars` is the switch. Set it to `false` and apply to remove the cluster, node group, and access entries, which stops the ~$3.10/day. The VPC, subnets, and IAM roles stay (they're free), so setting it back to `true` recreates the cluster in about 15 minutes.
+
+`terraform destroy` is blocked on purpose: the VPC has `prevent_destroy`, so a stray destroy can't take down the whole module. If you really want to remove everything, delete that `lifecycle` block in a reviewed change first.
 
 ### CI
 
-PRs and pushes to `main` that touch `eks-dev/` only run a plan. To create, change, or remove the cluster, run the **Terraform EKS Dev Cluster** workflow manually and pick `apply` or `destroy`.
+PRs and pushes to `main` that touch `eks-dev/` only run a plan. To make a merged change take effect, including turning the cluster on or off with `enabled`, run the **Terraform EKS Dev Cluster** workflow manually and pick `apply`.
 
 One-time setup: create a GitHub Environment named `eks-dev` with secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` and a variable `ADMIN_CIDR` (e.g. `203.0.113.4/32`). Don't add required reviewers to it, because they would also block PR plans.
 
 ### Kubernetes version
 
-`kubernetes_version` defaults to `null`, which creates the cluster on the current EKS default version. Terraform won't upgrade it later on its own. To upgrade, set `kubernetes_version` one minor version higher and apply. A cluster left running past its end of standard support moves to extended-support pricing ($0.60/hr), so for this disposable cluster, destroying and recreating it is usually simpler.
+`kubernetes_version` defaults to `null`, which creates the cluster on the current EKS default version. Terraform won't upgrade it later on its own. To upgrade, set `kubernetes_version` one minor version higher and apply. A cluster left running past its end of standard support moves to extended-support pricing ($0.60/hr), so for this disposable cluster, turning it off and on again with `enabled` is usually simpler.
 
 ### Provider lock file
 

@@ -1,3 +1,9 @@
+variable "enabled" {
+  description = "Whether the EKS cluster, node group, and access entries exist. false removes them (~$3.10/day) and keeps the free VPC and IAM roles."
+  type        = bool
+  default     = true
+}
+
 variable "cluster_name" {
   description = "Name of the EKS cluster, also used to prefix its VPC, subnets, and IAM roles."
   type        = string
