@@ -1,5 +1,14 @@
 provider "aws" {
   region = "us-east-2"
+
+  # Marks every resource as Terraform-managed, and says where its code lives.
+  default_tags {
+    tags = {
+      ManagedBy = "terraform"
+      Repo      = "aaronpotter/terraform-aws"
+      Stack     = "root"
+    }
+  }
 }
 
 data "aws_ami" "ubuntu" {

@@ -24,6 +24,11 @@ Production is the only environment for the root module. CI applies it when chang
 
 `main` is protected by a ruleset: every change needs a pull request, and the `Main Plan` and `EKS Dev Plan` checks must pass. Each workflow's `Detect Changes` job skips its plan when the PR doesn't touch that workflow's files. A skipped plan still counts as passing, so docs-only PRs aren't blocked.
 
+
+## Resource tags
+
+Every module's AWS provider sets `default_tags`, so every taggable resource carries `ManagedBy = terraform`, `Repo = aaronpotter/terraform-aws`, and `Stack` (`root`, `eks-dev`, `account`, or `bootstrap`). If you find a tagged resource in the console, change it in code, not by hand, or the nightly drift check will flag it (for `root` and `eks-dev`).
+=======
 ## State bucket protection (`bootstrap/`)
 
 The state bucket's policy limits writes even for account admins. `aws:PrincipalArn` is checked against these lists:
@@ -38,6 +43,7 @@ The state bucket's policy limits writes even for account admins. `aws:PrincipalA
 So a local `terraform apply` of `account/` or `eks-dev/` needs break-glass (see "Local credentials"). CI applies are unaffected. Root can always remove a bad bucket policy.
 
 `bootstrap/` keeps its own state locally (`bootstrap/terraform.tfstate`, git-ignored) because it creates the bucket. Applying it after this policy is in place also needs break-glass, since only `break-glass-admin` can change the bucket policy.
+
 
 ## Dev EKS cluster (`eks-dev/`)
 
