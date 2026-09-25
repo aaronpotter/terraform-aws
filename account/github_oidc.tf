@@ -13,7 +13,7 @@ locals {
 
   # The environment claim carries no branch; each environment's deployment-branch policy is what
   # keeps the apply environments on main.
-  plan_environments  = ["production-plan", "eks-dev"]
+  plan_environments  = ["production-plan", "eks-dev", "drift"]
   apply_environments = ["production", "eks-dev-apply"]
 
   state_bucket_arn = "arn:aws:s3:::${var.state_bucket_name}"

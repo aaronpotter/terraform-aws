@@ -1,0 +1,109 @@
+name: "Terraform Drift Detection"
+
+# Nightly read-only plan of every CI-managed stack. A plan with changes means something changed
+# outside Terraform (or a merged change was never applied): the run fails and a `drift` issue is
+# opened or updated.
+# Note: GitHub disables scheduled workflows in public repos after 60 days without repo activity;
+# re-enable it from the Actions tab if that happens.
+
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+
+env:
+  AWS_DEFAULT_REGION: us-east-2
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+concurrency:
+  group: drift
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    name: "Drift (${{ matrix.stack }})"
+    runs-on: ubuntu-latest
+    # main only; AWS_ROLE_ARN is the read-only terraform-plan role.
+    environment: drift
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - stack: production
+            dir: .
+            init_args: -backend-config=environments/production/backend.tfvars
+            plan_args: -var-file=environments/production/terraform.tfvars
+          - stack: eks-dev
+            dir: eks-dev
+            init_args: ""
+            plan_args: ""
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+
+    env:
+      TF_VAR_ssh_cidr: ${{ vars.SSH_CIDR }}
+      TF_VAR_admin_cidr: ${{ vars.ADMIN_CIDR }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+          role-session-name: gha-drift-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # No wrapper: the plan step needs terraform's raw exit code.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.16.4"
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: terraform init -input=false ${{ matrix.init_args }}
+
+      # -detailed-exitcode: 0 = no changes, 1 = error, 2 = changes (drift).
+      # Only resource addresses and the summary are printed: this repo's Actions logs are public,
+      # and full plans can show values like the SSH CIDR.
+      - name: Terraform Plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -input=false -no-color -lock-timeout=5m -detailed-exitcode ${{ matrix.plan_args }} > plan.log 2>&1
+          code=$?
+          set -e
+          grep -E '^  # |^Plan:|^No changes' plan.log > summary.txt || true
+          cat summary.txt
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 1 ]; then
+            grep -E -A4 'Error' plan.log | head -40
+            exit 1
+          fi
+
+      - name: Report Drift
+        if: steps.plan.outputs.code == '2'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STACK: ${{ matrix.stack }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create drift --color B60205 --description "Infrastructure differs from Terraform" --force
+          title="Drift detected: ${STACK}"
+          body=$(printf 'The nightly read-only plan found changes in **%s** that are not in `main`.\n\n```\n%s\n```\n\nRun: %s\n\nReconcile by putting the change in code, or reverting it in AWS. Close this issue once the plan is clean.' "$STACK" "$(cat summary.txt)" "$RUN_URL")
+          existing=$(gh issue list --label drift --state open --json number,title -q ".[] | select(.title == \"${title}\") | .number" | head -1)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --label drift --body "$body"
+          fi
+          # Fail the run too, so GitHub's failed-workflow email goes out.
+          exit 1
