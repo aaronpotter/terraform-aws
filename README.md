@@ -1,6 +1,6 @@
 # terraform-aws
 
-A single EC2 instance per environment in its own VPC, plus an on-demand EKS dev cluster (`eks-dev/`), with Terraform state in S3.
+A production EC2 lab instance in its own VPC, plus an on-demand EKS dev cluster (`eks-dev/`), with Terraform state in S3.
 
 ## First-time setup
 
@@ -12,11 +12,13 @@ terraform init
 terraform apply        # creates tfstate bucket
 
 cd ..
-terraform init         # uses the S3 backend in terraform.tf
-terraform apply -var ssh_cidr=<your-ip>/32
+terraform init -backend-config=environments/production/backend.tfvars
+terraform plan -var-file=environments/production/terraform.tfvars -var ssh_cidr=<your-ip>/32
 ```
 
-The bucket name and region in `bootstrap/variables.tf` must match the `backend "s3"` block in `terraform.tf`.
+The bucket name and region in `bootstrap/variables.tf` must match the `backend "s3"` block in `terraform.tf`. That block has no default `key`, so `terraform init` must always be given an environment's `backend.tfvars`.
+
+Production is the only environment for the root module. CI applies it when changes merge to `main`. PR and manual runs only plan it, using the unprotected `production-plan` GitHub environment. The apply uses `production`, which requires approval.
 
 ## Dev EKS cluster (`eks-dev/`)
 

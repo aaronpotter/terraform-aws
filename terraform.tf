@@ -8,9 +8,10 @@ terraform {
 
   required_version = ">= 1.16.4"
 
+  # No default key: init must be given -backend-config=environments/<env>/backend.tfvars,
+  # so a bare `terraform init` can't silently pick a state.
   backend "s3" {
     bucket       = "apotter-tfstate-us-east-2"
-    key          = "environments/development/terraform.tfstate"
     region       = "us-east-2"
     encrypt      = true
     use_lockfile = true

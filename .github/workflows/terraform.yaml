@@ -1,16 +1,8 @@
 name: "Terraform Multi-Environment Pipeline"
 
 on:
+  # Manual runs plan production and never apply.
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to plan (manual runs never apply)'
-        required: true
-        default: 'development'
-        type: choice
-        options:
-          - development
-          - production
   # The EKS dev cluster has its own root module, state, and workflow.
   # account/ is applied only by a human, never by CI.
   pull_request:
@@ -39,13 +31,12 @@ jobs:
     name: "Main Plan"
     runs-on: ubuntu-latest
     # Secrets and variables live in GitHub environments; the job must declare one to read them.
-    # Manual runs plan the chosen environment. Otherwise pushes to main plan production (the plan the
-    # apply job uses) and PRs plan development.
-    # Keep both expressions identical: the env context isn't available on the environment key.
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'main' && 'production' || 'development') }}
+    # Every run plans production state. production-plan has no reviewers, so PR plans don't wait
+    # for approval; only the apply job uses the protected production environment.
+    environment: production-plan
 
     env:
-      ENV_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'main' && 'production' || 'development') }}
+      ENV_NAME: production
 
     steps:
       - name: Checkout Code
