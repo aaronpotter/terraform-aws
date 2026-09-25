@@ -1,5 +1,14 @@
 provider "aws" {
   region = var.region
+
+  # Marks every resource as Terraform-managed, and says where its code lives.
+  default_tags {
+    tags = {
+      ManagedBy = "terraform"
+      Repo      = "aaronpotter/terraform-aws"
+      Stack     = "bootstrap"
+    }
+  }
 }
 
 resource "aws_s3_bucket" "tfstate" {
