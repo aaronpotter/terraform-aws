@@ -133,8 +133,13 @@ resource "aws_eks_cluster" "main" {
     bootstrap_cluster_creator_admin_permissions = false
   }
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   # Keep the role's permissions until the cluster is gone on destroy.
   depends_on = [aws_iam_role_policy_attachment.cluster]
+
 }
 
 resource "aws_eks_access_entry" "admin" {

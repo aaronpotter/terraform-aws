@@ -40,7 +40,11 @@ variable "admin_cidr" {
 variable "cluster_admin_arns" {
   description = "IAM principal ARNs granted cluster-admin through EKS access entries."
   type        = list(string)
-  default     = ["arn:aws:iam::549610932637:user/github-actions-terraform"]
+  default = [
+    "arn:aws:iam::549610932637:user/github-actions-terraform",
+    # Console user; without an entry the EKS console can't list pods, nodes, or other Kubernetes objects.
+    "arn:aws:iam::549610932637:user/apotter",
+  ]
 }
 
 variable "node_instance_type" {
