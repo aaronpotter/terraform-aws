@@ -38,7 +38,7 @@ jobs:
   # Job 1: Plan (every trigger). Merges only ever plan.
   # ------------------------------------------------------------------
   plan:
-    name: "Terraform Plan"
+    name: "EKS Dev Plan"
     runs-on: ubuntu-latest
     # Holds AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and the ADMIN_CIDR variable.
     # No required reviewers here: they would also block PR plans.

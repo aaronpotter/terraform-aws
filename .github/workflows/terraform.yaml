@@ -12,18 +12,21 @@ on:
           - development
           - production
   # The EKS dev cluster has its own root module, state, and workflow.
+  # account/ is applied only by a human, never by CI.
   pull_request:
     branches:
       - main
     paths-ignore:
       - "eks-dev/**"
       - ".github/workflows/terraform-eks-dev.yaml"
+      - "account/**"
   push:
     branches:
       - main
     paths-ignore:
       - "eks-dev/**"
       - ".github/workflows/terraform-eks-dev.yaml"
+      - "account/**"
     
 env:
   AWS_DEFAULT_REGION: us-east-2
@@ -33,7 +36,7 @@ jobs:
   # Job 1: Terraform Plan (Runs on Pull Requests & Pushes)
   # ------------------------------------------------------------------
   plan:
-    name: "Terraform Plan"
+    name: "Main Plan"
     runs-on: ubuntu-latest
     # Secrets and variables live in GitHub environments; the job must declare one to read them.
     # Manual runs plan the chosen environment. Otherwise pushes to main plan production (the plan the

@@ -56,3 +56,16 @@ CI runs on linux_amd64. After changing provider versions, refresh the hashes for
 ```sh
 terraform providers lock -platform=darwin_arm64 -platform=linux_amd64
 ```
+
+## Account guardrails (`account/`)
+
+Account-level controls: currently the CloudTrail trail (`account-trail`, all regions, log file validation) and its log bucket `apotter-cloudtrail-549610932637`. It's a separate root module with state key `account/terraform.tfstate`.
+
+**CI never applies this module**, and `terraform.yaml` ignores `account/**`. A human applies it after review, so a merged PR can't weaken the guardrails:
+
+```sh
+cd account
+terraform init
+terraform plan -out=account.tfplan
+terraform apply account.tfplan
+```
