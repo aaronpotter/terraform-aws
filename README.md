@@ -18,7 +18,7 @@ terraform plan -var-file=environments/production/terraform.tfvars -var ssh_cidr=
 
 The bucket name and region in `bootstrap/variables.tf` must match the `backend "s3"` block in `terraform.tf`. That block has no default `key`, so `terraform init` must always be given an environment's `backend.tfvars`.
 
-Production is the only environment for the root module. CI applies it when changes merge to `main`. PR and manual runs only plan it, using the unprotected `production-plan` GitHub environment. The apply uses `production`, which requires approval and only deploys from `main`.
+Production is the only environment for the root module. CI applies it when changes merge to `main`. PR and manual runs only plan it, using the unprotected `production-plan` GitHub environment. The apply uses `production`, which requires approval and only deploys from `main`. `production-plan` sets `AWS_ROLE_ARN` to `terraform-plan`, and `production` sets it to `terraform-apply`.
 
 ## Changes go through PRs
 
@@ -53,9 +53,9 @@ kubectl get nodes
 
 PRs and pushes to `main` that touch `eks-dev/` only run a plan. To make a merged change take effect, including turning the cluster on or off with `enabled`, run the **Terraform EKS Dev Cluster** workflow manually **from `main`** and pick `apply`. The apply job uses the `eks-dev-apply` environment, which only deploys from `main`, so an apply started from a branch is refused.
 
-One-time setup: two GitHub Environments, each with secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`:
-- `eks-dev`, used by the plan job. Add a variable `ADMIN_CIDR` (e.g. `203.0.113.4/32`). Leave it open to all branches and don't add required reviewers, because PR plans run on `refs/pull/*` and would be blocked.
-- `eks-dev-apply`, used by the apply job. Set its deployment branch policy to `main` only.
+One-time setup: two GitHub Environments. There are no AWS secrets: each job assumes the role in its environment's `AWS_ROLE_ARN` variable through GitHub OIDC (see `account/`).
+- `eks-dev`, used by the plan job. `AWS_ROLE_ARN` is the `terraform-plan` role. Add a variable `ADMIN_CIDR` (e.g. `203.0.113.4/32`). Leave it open to all branches and don't add required reviewers, because PR plans run on `refs/pull/*` and would be blocked.
+- `eks-dev-apply`, used by the apply job. `AWS_ROLE_ARN` is the `terraform-apply` role. Set its deployment branch policy to `main` only, because that policy is what keeps the admin role on `main`.
 
 ### Kubernetes version
 

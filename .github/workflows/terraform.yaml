@@ -14,6 +14,11 @@ on:
 env:
   AWS_DEFAULT_REGION: us-east-2
 
+# id-token lets jobs request the OIDC token that configure-aws-credentials exchanges for a role.
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   # ------------------------------------------------------------------
   # Job 0: Decide whether this workflow's plan is relevant.
@@ -73,6 +78,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # Short-lived credentials via GitHub OIDC; the role comes from the job's environment.
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+          role-session-name: gha-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
@@ -80,15 +93,10 @@ jobs:
 
       - name: Terraform Init
         run: terraform init -input=false -backend-config=environments/${{ env.ENV_NAME }}/backend.tfvars
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Terraform Plan
         run: terraform plan -input=false -no-color -var-file=environments/${{ env.ENV_NAME }}/terraform.tfvars -out=tfplan
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           # Kept out of the committed tfvars so an address never lands in the repo.
           TF_VAR_ssh_cidr: ${{ vars.SSH_CIDR }}
 
@@ -116,6 +124,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # Short-lived credentials via GitHub OIDC; the role comes from the job's environment.
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+          role-session-name: gha-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
@@ -123,9 +139,6 @@ jobs:
 
       - name: Terraform Init
         run: terraform init -input=false -backend-config=environments/production/backend.tfvars
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Download Plan
         uses: actions/download-artifact@v4
@@ -136,6 +149,3 @@ jobs:
       # Terraform refuses it if state changed since the plan was made.
       - name: Terraform Apply
         run: terraform apply -input=false tfplan
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
