@@ -41,6 +41,10 @@ jobs:
             dir: eks-dev
             init_args: ""
             plan_args: ""
+          - stack: apps
+            dir: apps
+            init_args: ""
+            plan_args: ""
     defaults:
       run:
         working-directory: ${{ matrix.dir }}

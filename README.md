@@ -90,6 +90,27 @@ CI runs on linux_amd64. After changing provider versions, refresh the hashes for
 terraform providers lock -platform=darwin_arm64 -platform=linux_amd64
 ```
 
+## Apps (`apps/`)
+
+Resources that were first created by hand, and brought under Terraform with `import` blocks (`apps/imports.tf`). State key: `environments/apps/terraform.tfstate`.
+
+| Resource | Notes |
+|---|---|
+| Lambda `s3-trigger-unzip` (Python 3.14) + role `lambda-s3-trigger-role` + policy `s3-trigger` + log group | A `.gz` object in `apotter-lambda-input` is decompressed into `apotter-lambda-output`, then deleted from the input bucket. **The code lives in `apps/lambda/s3-trigger-unzip/`** and deploys through Terraform. |
+| Buckets `apotter-lambda-input`, `-output`, `-scripts` | SSE-S3, public access blocked, ACLs disabled. The input bucket's `.gz` object-created notification triggers the Lambda. |
+| ECR `hello-world` | Immutable tags, scan on push. The `kubernetes-deploy` repo pushes images here. |
+| Role `github-actions-deploy` | OIDC role for `aaronpotter/kubernetes-deploy`: `AmazonEC2ContainerRegistryPowerUser` + `eks:DescribeCluster`. |
+
+**CI** (`terraform-apps.yaml`): same flow as the root module. `Apps Plan` runs on PRs with the read-only role in `production-plan`. On merge, `Terraform Apply - Apps` waits for approval in `production`. The Lambda zip is built during plan and uploaded with the saved plan, so the apply deploys exactly what was planned. Drift detection covers this stack too.
+
+This module uses **AWS provider 6.x**. The other modules are on 5.x, which rejects the `python3.14` runtime.
+
+**Known issues, left as they were imported:**
+- `github-actions-deploy` trusts `repo:aaronpotter@*/kubernetes-deploy@*:*`. The wildcarded IDs undo the rename protection that the immutable subject format gives, and `:*` accepts any branch, environment, or same-repo PR. Pin it to `repo:aaronpotter@9371584/kubernetes-deploy@1393066535:` and to the environments/refs actually used (`environment:production`, `environment:staging`, `ref:refs/heads/main`).
+- `AmazonEC2ContainerRegistryPowerUser` lets that role push to and delete from **every** ECR repository. An inline policy scoped to `hello-world` would be tighter.
+- The log group never expires, and the ECR repository has no lifecycle policy, so images accumulate.
+- `hello-world` has immutable tags, so a `latest` tag can't be moved after its first push.
+
 ## Drift detection
 
 `.github/workflows/terraform-drift.yaml` runs daily at 12:00 UTC, and on demand from `main`. It uses the `drift` environment, which is limited to `main` and assumes the read-only `terraform-plan` role. It runs `terraform plan -detailed-exitcode` for `production` and `eks-dev`.
