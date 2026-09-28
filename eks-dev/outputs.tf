@@ -17,3 +17,23 @@ output "configure_kubectl" {
   description = "Command that writes this cluster into your kubeconfig."
   value       = var.enabled ? "aws eks update-kubeconfig --region us-east-2 --name ${var.cluster_name}" : "Cluster is disabled; set enabled = true in terraform.tfvars and apply."
 }
+
+output "db_endpoint" {
+  description = "PostgreSQL host, reachable only from inside the cluster."
+  value       = aws_db_instance.main.address
+}
+
+output "db_port" {
+  description = "PostgreSQL port."
+  value       = aws_db_instance.main.port
+}
+
+output "db_name" {
+  description = "Initial database name."
+  value       = aws_db_instance.main.db_name
+}
+
+output "db_master_secret_arn" {
+  description = "Secrets Manager secret holding the master username and password."
+  value       = one(aws_db_instance.main.master_user_secret[*].secret_arn)
+}
