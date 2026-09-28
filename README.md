@@ -53,6 +53,24 @@ A managed EKS cluster named `apotterlab`: one on-demand t3.small node in public 
 
 **Cost:** about $3.10/day (~$93/month) while it exists, mostly the $0.10/hr EKS control plane. On the Free plan that comes out of your credits, and AWS closes the account when they run out unless you upgrade to a paid plan. Set `enabled = false` when you're not using it.
 
+### PostgreSQL (`eks-dev/database.tf`)
+
+An RDS PostgreSQL 18 database (`apotterlab-postgres`, `db.t4g.micro`, 20 GiB gp3, encrypted) in two private subnets of the apotterlab VPC (`10.2.11.0/24`, `10.2.12.0/24`, with no route to the internet). Only the EKS cluster security group can reach port 5432, so nodes and pods can connect and nothing outside the cluster can.
+
+- **It doesn't depend on `enabled`.** Turning the cluster off keeps the database and its data. While the cluster is off, nothing can connect.
+- **Deletion protection is on**, and destroying it still takes a final snapshot (`apotterlab-postgres-final`). It has 7 days of automated backups, and is single-AZ.
+- **Password:** RDS generates the master password and keeps it in Secrets Manager (`terraform output db_master_secret_arn`). It never appears in state or in this repo. **RDS rotates it every 7 days by default**, so a password copied into a Kubernetes Secret stops working after the next rotation. For anything long-lived, have the app read the secret at runtime (with EKS Pod Identity), or sync it with External Secrets Operator.
+- **Free plan:** only `db.t3.micro` and `db.t4g.micro` are allowed for PostgreSQL.
+
+For a quick test from inside the cluster:
+
+```sh
+SECRET=$(terraform -chdir=eks-dev output -raw db_master_secret_arn)
+HOST=$(terraform -chdir=eks-dev output -raw db_endpoint)
+PASS=$(aws secretsmanager get-secret-value --secret-id "$SECRET" --query SecretString --output text | python3 -c 'import json,sys; print(json.load(sys.stdin)["password"])')
+kubectl run psql --rm -it --restart=Never --image=postgres:18 --env=PGPASSWORD="$PASS" -- psql -h "$HOST" -U postgres -d app -c 'select version();'
+```
+
 ### Locally
 
 ```sh
