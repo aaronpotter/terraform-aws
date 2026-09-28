@@ -79,15 +79,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
-    # Holds AWS_ROLE_ARN (terraform-plan) and the ADMIN_CIDR variable.
+    # Holds AWS_ROLE_ARN (terraform-plan).
     # No required reviewers here: they would also block PR plans.
     environment: eks-dev
     defaults:
       run:
         working-directory: eks-dev
-
-    env:
-      TF_VAR_admin_cidr: ${{ vars.ADMIN_CIDR }}
 
     steps:
       - name: Checkout Code
