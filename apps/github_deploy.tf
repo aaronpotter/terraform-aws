@@ -1,5 +1,15 @@
-# CI role for the aaronpotter/kubernetes-deploy repo: pushes images to ECR and reads EKS cluster info.
-# Imported as it was built by hand; see README "Apps" for the recommended tightening.
+# CI role for the aaronpotter/kubernetes-deploy repo: pushes images to ECR, reads EKS cluster info,
+# and (via an access entry in eks-dev/) deploys into the production namespace.
+
+locals {
+  # Immutable subject format: owner and repo IDs pinned, so a renamed or re-created repo can't match.
+  # Only the two jobs that use this role: build-push (push to main, no environment) and
+  # deploy-production (environment: production).
+  github_deploy_subjects = [
+    "repo:aaronpotter@9371584/kubernetes-deploy@1393066535:ref:refs/heads/main",
+    "repo:aaronpotter@9371584/kubernetes-deploy@1393066535:environment:production",
+  ]
+}
 
 resource "aws_iam_role" "github_deploy" {
   name = "github-actions-deploy"
@@ -11,8 +21,10 @@ resource "aws_iam_role" "github_deploy" {
       Principal = { Federated = "arn:aws:iam::${local.account_id}:oidc-provider/token.actions.githubusercontent.com" }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
-        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:aaronpotter@*/kubernetes-deploy@*:*" }
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = local.github_deploy_subjects
+        }
       }
     }]
   })
