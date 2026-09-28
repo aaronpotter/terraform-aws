@@ -58,9 +58,9 @@ A managed EKS cluster named `apotterlab`: one on-demand t3.small node in public 
 An RDS PostgreSQL 18 database (`apotterlab-postgres`, `db.t4g.micro`, 20 GiB gp3, encrypted) in two private subnets of the apotterlab VPC (`10.2.11.0/24`, `10.2.12.0/24`, with no route to the internet). Only the EKS cluster security group can reach port 5432, so nodes and pods can connect and nothing outside the cluster can.
 
 - **It doesn't depend on `enabled`.** Turning the cluster off keeps the database and its data. While the cluster is off, nothing can connect.
-- **Deletion protection is on**, and destroying it still takes a final snapshot (`apotterlab-postgres-final`). It has 7 days of automated backups, and is single-AZ.
+- **Deletion protection is on**, and destroying it still takes a final snapshot (`apotterlab-postgres-final`). It has **1 day** of automated backups, the Free plan's maximum (anything higher fails with `FreeTierRestrictionError`), and is single-AZ.
 - **Password:** RDS generates the master password and keeps it in Secrets Manager (`terraform output db_master_secret_arn`). It never appears in state or in this repo. **RDS rotates it every 7 days by default**, so a password copied into a Kubernetes Secret stops working after the next rotation. For anything long-lived, have the app read the secret at runtime (with EKS Pod Identity), or sync it with External Secrets Operator.
-- **Free plan:** only `db.t3.micro` and `db.t4g.micro` are allowed for PostgreSQL.
+- **Free plan:** only `db.t3.micro` and `db.t4g.micro` are allowed for PostgreSQL, and backups are capped at 1 day. Upgrading the account plan removes both limits.
 
 For a quick test from inside the cluster:
 

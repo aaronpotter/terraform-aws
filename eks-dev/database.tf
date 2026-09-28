@@ -88,7 +88,9 @@ resource "aws_db_instance" "main" {
   publicly_accessible    = false
   multi_az               = false
 
-  backup_retention_period    = 7
+  # The AWS Free plan caps automated backups at 1 day (7 fails with FreeTierRestrictionError).
+  # Raise this after upgrading the account plan.
+  backup_retention_period    = 1
   copy_tags_to_snapshot      = true
   auto_minor_version_upgrade = true
 
