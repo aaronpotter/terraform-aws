@@ -1,9 +1,13 @@
-name: "Terraform Multi-Environment Pipeline"
+name: "Terraform Apps"
+
+# apps/: the s3-trigger-unzip Lambda and its buckets, the hello-world ECR repository, and the
+# github-actions-deploy role. Same flow as the root module: plan on every PR (read-only role via
+# production-plan), apply on merge to main after approval in the production environment.
 
 on:
-  # Manual runs plan production and never apply.
+  # Manual runs plan only.
   workflow_dispatch:
-  # Path filtering happens in the changes job, not here (see below).
+  # Path filtering happens in the changes job, not here, so the plan check always reports.
   pull_request:
     branches:
       - main
@@ -14,18 +18,16 @@ on:
 env:
   AWS_DEFAULT_REGION: us-east-2
 
-# id-token lets jobs request the OIDC token that configure-aws-credentials exchanges for a role.
 permissions:
   id-token: write
   contents: read
 
+# One run at a time against this state; never cancel a run mid-apply.
+concurrency:
+  group: apps
+  cancel-in-progress: false
+
 jobs:
-  # ------------------------------------------------------------------
-  # Job 0: Decide whether this workflow's plan is relevant.
-  # Filtering here instead of with on.paths keeps the plan check reporting on every
-  # PR: a job skipped by `if:` counts as passing for required status checks, while a
-  # workflow skipped by paths never reports and blocks the PR.
-  # ------------------------------------------------------------------
   changes:
     name: "Detect Changes"
     runs-on: ubuntu-latest
@@ -37,8 +39,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Anything outside eks-dev/, apps/, and account/ can affect the shared root module.
-      # (eks-dev/ and apps/ have their own workflows; account/ is applied only by a human, never by CI.)
+      # Only apps/ and this workflow affect this stack.
       - name: Filter Changed Paths
         id: filter
         env:
@@ -52,33 +53,27 @@ jobs:
           fi
           changed=$(git diff --name-only "$BASE" "$HEAD")
           echo "$changed"
-          if [ -n "$(echo "$changed" | grep -vE '^(eks-dev/|apps/|account/|\.github/workflows/terraform-(eks-dev|apps)\.yaml$)')" ]; then
+          if [ -n "$(echo "$changed" | grep -E '^(apps/|\.github/workflows/terraform-apps\.yaml$)')" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # ------------------------------------------------------------------
-  # Job 1: Terraform Plan (Runs on Pull Requests & Pushes)
-  # ------------------------------------------------------------------
   plan:
-    name: "Main Plan"
+    name: "Apps Plan"
     needs: changes
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
-    # Secrets and variables live in GitHub environments; the job must declare one to read them.
-    # Every run plans production state. production-plan has no reviewers, so PR plans don't wait
-    # for approval; only the apply job uses the protected production environment.
+    # AWS_ROLE_ARN here is the read-only terraform-plan role.
     environment: production-plan
-
-    env:
-      ENV_NAME: production
+    defaults:
+      run:
+        working-directory: apps
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Short-lived credentials via GitHub OIDC; the role comes from the job's environment.
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
@@ -92,39 +87,42 @@ jobs:
           terraform_version: "1.16.4"
 
       - name: Terraform Init
-        run: terraform init -input=false -backend-config=environments/${{ env.ENV_NAME }}/backend.tfvars
+        run: terraform init -input=false
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
 
       - name: Terraform Plan
-        run: terraform plan -input=false -no-color -var-file=environments/${{ env.ENV_NAME }}/terraform.tfvars -out=tfplan
-        env:
-          # Kept out of the committed tfvars so an address never lands in the repo.
-          TF_VAR_ssh_cidr: ${{ vars.SSH_CIDR }}
+        run: terraform plan -input=false -no-color -out=tfplan
 
-      # The apply job applies exactly this file. It can hold variable values in
-      # plain text, so keep retention short.
+      # The apply job applies exactly this plan, and needs the Lambda zip it references.
       - name: Upload Plan
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-${{ env.ENV_NAME }}
-          path: tfplan
+          name: tfplan-apps
+          path: |
+            apps/tfplan
+            apps/build/
           retention-days: 5
 
-  # ------------------------------------------------------------------
-  # Job 2: Production Apply (Runs ONLY when merged to main)
-  # ------------------------------------------------------------------
-  apply-production:
-    name: "Terraform Apply - Production"
+  apply:
+    name: "Terraform Apply - Apps"
     needs: plan
-    # Only run on pushes (merges) to the main branch
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production # Uses GitHub Environment protection rules
+    # AWS_ROLE_ARN here is terraform-apply; main only, required reviewer.
+    environment: production
+    defaults:
+      run:
+        working-directory: apps
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Short-lived credentials via GitHub OIDC; the role comes from the job's environment.
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
@@ -138,12 +136,13 @@ jobs:
           terraform_version: "1.16.4"
 
       - name: Terraform Init
-        run: terraform init -input=false -backend-config=environments/production/backend.tfvars
+        run: terraform init -input=false
 
       - name: Download Plan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-production
+          name: tfplan-apps
+          path: apps
 
       # A saved plan carries its own variables and needs no approval flag.
       # Terraform refuses it if state changed since the plan was made.
