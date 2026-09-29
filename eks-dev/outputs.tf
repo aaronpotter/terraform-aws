@@ -39,7 +39,7 @@ output "db_master_secret_arn" {
 }
 
 output "app_db_secret_role_arn" {
-  description = "Pod Identity role mapped to the app's ServiceAccount; can read the DB master secret."
+  description = "Pod Identity role mapped to the app's ServiceAccount; can read the app_user DB secret only."
   value       = aws_iam_role.app_db_secret.arn
 }
 

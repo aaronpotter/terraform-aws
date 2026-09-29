@@ -40,7 +40,7 @@ resource "aws_eks_addon" "pod_identity_agent" {
 
 resource "aws_iam_role" "app_db_secret" {
   name        = "${var.cluster_name}-${var.app_service_account}-db-secret"
-  description = "Pod Identity role for ${var.app_namespace}/${var.app_service_account}: read the RDS master secret."
+  description = "Pod Identity role for ${var.app_namespace}/${var.app_service_account}: read the app_user DB secret."
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -53,7 +53,9 @@ resource "aws_iam_role" "app_db_secret" {
 }
 
 # The secret uses the default aws/secretsmanager key, so no kms:Decrypt is needed.
-# Master secret: the chart's migration Job creates app_user with it. App user secret: the app itself.
+# The app reads only its least-privilege app_user secret. The master secret is readable only by the
+# migration role (database_app_user.tf). The policy keeps its original name so this change updates
+# it in place; renaming would replace it and briefly cut the pods' access.
 resource "aws_iam_role_policy" "app_db_secret" {
   name = "read-db-master-secret"
   role = aws_iam_role.app_db_secret.id
@@ -61,12 +63,9 @@ resource "aws_iam_role_policy" "app_db_secret" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
-      Action = "secretsmanager:GetSecretValue"
-      Resource = [
-        aws_db_instance.main.master_user_secret[0].secret_arn,
-        aws_secretsmanager_secret.app_db_user.arn,
-      ]
+      Effect   = "Allow"
+      Action   = "secretsmanager:GetSecretValue"
+      Resource = aws_secretsmanager_secret.app_db_user.arn
     }]
   })
 }
