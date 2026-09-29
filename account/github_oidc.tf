@@ -74,9 +74,13 @@ data "aws_iam_policy_document" "terraform_plan_state_lock" {
   # secret version calls GetSecretValue. The value is already in apps state, which this role can
   # read, so this adds no exposure. No other secret is readable.
   statement {
-    sid       = "RefreshOriginVerifySecret"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = ["arn:aws:secretsmanager:us-east-2:${local.account_id}:secret:apotterlab-origin-verify-??????"]
+    sid     = "RefreshOriginVerifySecret"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      "arn:aws:secretsmanager:us-east-2:${local.account_id}:secret:apotterlab-origin-verify-??????",
+      # Same reason, for the Security+ exam's CloudFront header (apps/secplus.tf).
+      "arn:aws:secretsmanager:us-east-2:${local.account_id}:secret:apotterlab-secplus-origin-verify-??????",
+    ]
   }
 }
 

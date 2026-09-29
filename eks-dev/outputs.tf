@@ -57,3 +57,8 @@ output "app_migrate_db_secret_role_arn" {
   description = "Pod Identity role for the migration ServiceAccount; reads the master and app_user secrets."
   value       = aws_iam_role.app_migrate_db_secret.arn
 }
+
+output "secplus_db_secret_name" {
+  description = "Secrets Manager secret (value set out-of-band) holding the Security+ exam's DB login; the chart's db.secretId."
+  value       = aws_secretsmanager_secret.secplus_db_user.name
+}
