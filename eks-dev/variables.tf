@@ -33,16 +33,6 @@ variable "public_subnet_cidrs" {
   }
 }
 
-variable "admin_cidr" {
-  description = "CIDR block allowed to reach the EKS API's public endpoint, e.g. 203.0.113.4/32. No default on purpose; supply via TF_VAR_admin_cidr."
-  type        = string
-
-  validation {
-    condition     = var.admin_cidr != "0.0.0.0/0"
-    error_message = "Refusing 0.0.0.0/0: scope admin_cidr to a specific address."
-  }
-}
-
 variable "cluster_admin_arns" {
   description = "IAM principal ARNs granted cluster-admin through EKS access entries."
   type        = list(string)

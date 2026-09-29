@@ -88,7 +88,6 @@ The `kubernetes` provider authenticates with `aws eks get-token` as whoever runs
 
 ```sh
 cd eks-dev
-export TF_VAR_admin_cidr=<your-ip>/32   # who can reach the API endpoint; never committed
 terraform init
 terraform apply                          # ~15 minutes
 aws eks update-kubeconfig --region us-east-2 --name apotterlab
@@ -106,7 +105,7 @@ kubectl get nodes
 PRs and pushes to `main` that touch `eks-dev/` only run a plan. To make a merged change take effect, including turning the cluster on or off with `enabled`, run the **Terraform EKS Dev Cluster** workflow manually **from `main`** and pick `apply`. The apply job uses the `eks-dev-apply` environment, which only deploys from `main`, so an apply started from a branch is refused.
 
 One-time setup: two GitHub Environments. There are no AWS secrets: each job assumes the role in its environment's `AWS_ROLE_ARN` variable through GitHub OIDC (see `account/`).
-- `eks-dev`, used by the plan job. `AWS_ROLE_ARN` is the `terraform-plan` role. Add a variable `ADMIN_CIDR` (e.g. `203.0.113.4/32`). Leave it open to all branches and don't add required reviewers, because PR plans run on `refs/pull/*` and would be blocked.
+- `eks-dev`, used by the plan job. `AWS_ROLE_ARN` is the `terraform-plan` role. Leave it open to all branches and don't add required reviewers, because PR plans run on `refs/pull/*` and would be blocked.
 - `eks-dev-apply`, used by the apply job. `AWS_ROLE_ARN` is the `terraform-apply` role. Set its deployment branch policy to `main` only, because that policy is what keeps the admin role on `main`.
 
 ### Kubernetes version
@@ -152,7 +151,7 @@ This module uses **AWS provider 6.x**. The other modules are on 5.x, which rejec
 - `account/` and `bootstrap/` aren't checked. They're applied by hand, and `bootstrap/` keeps its state locally.
 - GitHub disables scheduled workflows in public repos after 60 days without activity. Re-enable it from the Actions tab if that happens.
 
-The `drift` environment holds `AWS_ROLE_ARN` (`terraform-plan`), `SSH_CIDR`, and `ADMIN_CIDR`.
+The `drift` environment holds `AWS_ROLE_ARN` (`terraform-plan`) and `SSH_CIDR`.
 
 ## Account guardrails (`account/`)
 

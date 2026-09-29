@@ -51,7 +51,6 @@ jobs:
 
     env:
       TF_VAR_ssh_cidr: ${{ vars.SSH_CIDR }}
-      TF_VAR_admin_cidr: ${{ vars.ADMIN_CIDR }}
 
     steps:
       - name: Checkout Code
