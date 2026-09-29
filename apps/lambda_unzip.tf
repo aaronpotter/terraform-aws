@@ -118,7 +118,8 @@ data "archive_file" "unzip" {
 }
 
 resource "aws_cloudwatch_log_group" "unzip" {
-  name = "/aws/lambda/${local.unzip_function_name}"
+  name              = "/aws/lambda/${local.unzip_function_name}"
+  retention_in_days = 30
 }
 
 resource "aws_lambda_function" "unzip" {
