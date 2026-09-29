@@ -42,3 +42,13 @@ output "app_db_secret_role_arn" {
   description = "Pod Identity role mapped to the app's ServiceAccount; can read the DB master secret."
   value       = aws_iam_role.app_db_secret.arn
 }
+
+output "app_db_user_secret_name" {
+  description = "Secrets Manager secret with the app_user credentials ({\"username\",\"password\"})."
+  value       = aws_secretsmanager_secret.app_db_user.name
+}
+
+output "app_db_user_secret_arn" {
+  description = "ARN of the app_user credentials secret."
+  value       = aws_secretsmanager_secret.app_db_user.arn
+}

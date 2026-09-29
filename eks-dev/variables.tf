@@ -136,3 +136,9 @@ variable "deploy_role_arn" {
   type        = string
   default     = "arn:aws:iam::549610932637:role/github-actions-deploy"
 }
+
+variable "app_db_user_secret_version" {
+  description = "Bump to write a new random password to the app_user secret (it's write-only, so Terraform can't see drift)."
+  type        = number
+  default     = 1
+}

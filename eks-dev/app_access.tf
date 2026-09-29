@@ -53,6 +53,7 @@ resource "aws_iam_role" "app_db_secret" {
 }
 
 # The secret uses the default aws/secretsmanager key, so no kms:Decrypt is needed.
+# Master secret: the chart's migration Job creates app_user with it. App user secret: the app itself.
 resource "aws_iam_role_policy" "app_db_secret" {
   name = "read-db-master-secret"
   role = aws_iam_role.app_db_secret.id
@@ -60,9 +61,12 @@ resource "aws_iam_role_policy" "app_db_secret" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = "secretsmanager:GetSecretValue"
-      Resource = aws_db_instance.main.master_user_secret[0].secret_arn
+      Effect = "Allow"
+      Action = "secretsmanager:GetSecretValue"
+      Resource = [
+        aws_db_instance.main.master_user_secret[0].secret_arn,
+        aws_secretsmanager_secret.app_db_user.arn,
+      ]
     }]
   })
 }
