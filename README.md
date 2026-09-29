@@ -132,14 +132,13 @@ Resources that were first created by hand, and brought under Terraform with `imp
 | Buckets `apotter-lambda-input`, `-output`, `-scripts` | SSE-S3, public access blocked, ACLs disabled. The input bucket's `.gz` object-created notification triggers the Lambda. |
 | ECR `hello-world` | Immutable tags, scan on push. A lifecycle policy keeps the 20 newest **tagged** images. Untagged images stay, because they're the manifests inside multi-arch indexes like `latest`. The `kubernetes-deploy` repo pushes images here. |
 | Role `github-actions-ecr-push` | Build job for `kubernetes-deploy`, trusted only for `ref:refs/heads/main`. It can push to and read `hello-world` only (plus `ecr:GetAuthorizationToken`). |
-| Role `github-actions-deploy` | OIDC role for `aaronpotter/kubernetes-deploy`: `AmazonEC2ContainerRegistryPowerUser` + `eks:DescribeCluster`, plus namespace-scoped edit in the cluster (see eks-dev "App access"). Trust is pinned to that repo's IDs and exactly two subjects: `ref:refs/heads/main` (build-push) and `environment:production` (deploy). |
+| Role `github-actions-deploy` | OIDC role for `aaronpotter/kubernetes-deploy`'s deploy-production job: `eks:DescribeCluster`, plus namespace-scoped edit in the cluster (see eks-dev "App access"). No ECR access. Trust is pinned to that repo's IDs and **only** `environment:production`. |
 
 **CI** (`terraform-apps.yaml`): same flow as the root module. `Apps Plan` runs on PRs with the read-only role in `production-plan`. On merge, `Terraform Apply - Apps` waits for approval in `production`. The Lambda zip is built during plan and uploaded with the saved plan, so the apply deploys exactly what was planned. Drift detection covers this stack too.
 
 This module uses **AWS provider 6.x**. The other modules are on 5.x, which rejects the `python3.14` runtime.
 
 **Known issues, left as they were imported:**
-- **Role split in progress.** `github-actions-ecr-push` exists for the build job. Once `kubernetes-deploy`'s build job assumes it, stage 2 removes `ref:refs/heads/main` and `AmazonEC2ContainerRegistryPowerUser` from `github-actions-deploy`, leaving it trusted only for `environment:production` with EKS access. Until then, the deploy role can still push to (or delete from) every ECR repository.
 - The Lambda log group keeps 30 days of logs.
 - `hello-world` has immutable tags, so a `latest` tag can't be moved after its first push.
 

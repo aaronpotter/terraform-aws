@@ -1,12 +1,11 @@
-# CI role for the aaronpotter/kubernetes-deploy repo: pushes images to ECR, reads EKS cluster info,
-# and (via an access entry in eks-dev/) deploys into the production namespace.
+# CI role for the aaronpotter/kubernetes-deploy repo's deploy-production job: reads EKS cluster info
+# and (via an access entry in eks-dev/) runs helm in the production namespace. No ECR access; the
+# build job pushes with github-actions-ecr-push, and nodes pull images with the node role.
 
 locals {
   # Immutable subject format: owner and repo IDs pinned, so a renamed or re-created repo can't match.
-  # Only the two jobs that use this role: build-push (push to main, no environment) and
-  # deploy-production (environment: production).
+  # Only the production environment, so no plain main-branch job can reach the cluster.
   github_deploy_subjects = [
-    "repo:aaronpotter@9371584/kubernetes-deploy@1393066535:ref:refs/heads/main",
     "repo:aaronpotter@9371584/kubernetes-deploy@1393066535:environment:production",
   ]
 }
@@ -30,11 +29,6 @@ resource "aws_iam_role" "github_deploy" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "github_deploy_ecr" {
-  role       = aws_iam_role.github_deploy.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
-}
-
 resource "aws_iam_role_policy" "github_deploy_eks_describe" {
   name = "eks-describe"
   role = aws_iam_role.github_deploy.id
@@ -50,11 +44,10 @@ resource "aws_iam_role_policy" "github_deploy_eks_describe" {
 }
 
 # ------------------------------------------------------------------
-# Push-only role for the build job (stage 1 of splitting github-actions-deploy)
+# Push-only role for the build job
 # ------------------------------------------------------------------
-# build-push runs on every push to main and only needs to push to hello-world. Once the
-# kubernetes-deploy workflow's build job assumes this role, github-actions-deploy drops the
-# ref:refs/heads/main subject and its ECR access (stage 2), so no main-branch job can touch the cluster.
+# build-push runs on every push to main and only needs to push to hello-world. It has no EKS access;
+# deploying is github-actions-deploy's job, trusted only for environment:production.
 
 resource "aws_iam_role" "github_ecr_push" {
   name        = "github-actions-ecr-push"
