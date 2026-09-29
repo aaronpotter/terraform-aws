@@ -156,7 +156,7 @@ variable "secplus_migrate_service_account" {
 }
 
 variable "secplus_deploy_role_arn" {
-  description = "IAM role the Security+ exam repo's workflow uses for helm (output secplus_deploy_role_arn of apps/); gets edit access in app_namespace only. null until that role exists."
+  description = "IAM role the Security+ exam repo's workflow uses for helm (created in apps/secplus.tf); gets edit access in app_namespace only. Set to null to remove the access entry."
   type        = string
-  default     = null
+  default     = "arn:aws:iam::549610932637:role/github-actions-secplus-deploy"
 }
