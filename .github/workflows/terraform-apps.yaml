@@ -22,11 +22,6 @@ permissions:
   id-token: write
   contents: read
 
-# One run at a time against this state; never cancel a run mid-apply.
-concurrency:
-  group: apps
-  cancel-in-progress: false
-
 jobs:
   changes:
     name: "Detect Changes"
@@ -110,6 +105,12 @@ jobs:
 
   apply:
     name: "Terraform Apply - Apps"
+    # Only applies queue behind each other; plans run in parallel (Terraform's state lock already
+    # serializes state access). Workflow-wide concurrency made a pending apply approval block every
+    # PR's plan check. Never cancel a run mid-apply.
+    concurrency:
+      group: apps-apply
+      cancel-in-progress: false
     needs: plan
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
