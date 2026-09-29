@@ -142,3 +142,21 @@ variable "app_migrate_service_account" {
   type        = string
   default     = "hello-world-migrate"
 }
+
+variable "secplus_service_account" {
+  description = "ServiceAccount the Security+ exam pods run as (created by its Helm chart). Pod Identity maps it to a role that reads only that app's secrets."
+  type        = string
+  default     = "security-plus-exam"
+}
+
+variable "secplus_migrate_service_account" {
+  description = "ServiceAccount the Security+ exam's migration Job runs as (created by its chart). Reads the master DB secret to create the app's database and role."
+  type        = string
+  default     = "security-plus-exam-migrate"
+}
+
+variable "secplus_deploy_role_arn" {
+  description = "IAM role the Security+ exam repo's workflow uses for helm (output secplus_deploy_role_arn of apps/); gets edit access in app_namespace only. null until that role exists."
+  type        = string
+  default     = null
+}
