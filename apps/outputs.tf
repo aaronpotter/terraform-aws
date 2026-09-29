@@ -17,3 +17,8 @@ output "github_deploy_role_arn" {
   description = "Role the kubernetes-deploy repo assumes via OIDC."
   value       = aws_iam_role.github_deploy.arn
 }
+
+output "github_ecr_push_role_arn" {
+  description = "Role the kubernetes-deploy build job assumes to push to hello-world."
+  value       = aws_iam_role.github_ecr_push.arn
+}
