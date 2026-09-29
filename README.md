@@ -134,6 +134,11 @@ Resources that were first created by hand, and brought under Terraform with `imp
 | Role `github-actions-ecr-push` | Build job for `kubernetes-deploy`, trusted only for `ref:refs/heads/main`. It can push to and read `hello-world` only (plus `ecr:GetAuthorizationToken`). |
 | Role `github-actions-deploy` | OIDC role for `aaronpotter/kubernetes-deploy`'s deploy-production job: `eks:DescribeCluster`, plus namespace-scoped edit in the cluster (see eks-dev "App access"). No ECR access. Trust is pinned to that repo's IDs and **only** `environment:production`. |
 
+**CloudFront** (`cloudfront.tf`): the app is served at the distribution's `cloudfront_domain_name` output over HTTPS (default `*.cloudfront.net` certificate, `PriceClass_100`, IPv6, never cached, all methods allowed). CloudFront forwards to the Kubernetes-created load balancer over HTTP with an `X-Origin-Verify` header. The app rejects any request without it, so the raw load balancer URL returns 403.
+- The header value is a `random_password`, stored in Secrets Manager as `apotterlab-origin-verify` (the raw value, not JSON). The app reads it through its Pod Identity role. It's also in CloudFront's config, so it's in **apps state**. Plans show it as sensitive. `terraform-plan` can read this one secret, because refreshing it needs `GetSecretValue`, and the value is in state anyway.
+- **After recreating the cluster**, the load balancer hostname changes. Update `origin_domain` in `apps/terraform.tfvars` (`kubectl -n production get svc hello-world -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'`) and apply. Until then, CloudFront returns 502/504.
+- The CloudFront-to-load-balancer hop is unencrypted, including the header, because the in-tree load balancer only listens on HTTP.
+
 **CI** (`terraform-apps.yaml`): same flow as the root module. `Apps Plan` runs on PRs with the read-only role in `production-plan`. On merge, `Terraform Apply - Apps` waits for approval in `production`. The Lambda zip is built during plan and uploaded with the saved plan, so the apply deploys exactly what was planned. Drift detection covers this stack too.
 
 This module uses **AWS provider 6.x**. The other modules are on 5.x, which rejects the `python3.14` runtime.

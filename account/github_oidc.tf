@@ -69,6 +69,15 @@ data "aws_iam_policy_document" "terraform_plan_state_lock" {
     actions   = ["s3:PutObject", "s3:DeleteObject"]
     resources = ["${local.state_bucket_arn}/*.tflock"]
   }
+
+  # apps/ manages this secret's value (it must also sit in CloudFront's config), and refreshing a
+  # secret version calls GetSecretValue. The value is already in apps state, which this role can
+  # read, so this adds no exposure. No other secret is readable.
+  statement {
+    sid       = "RefreshOriginVerifySecret"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["arn:aws:secretsmanager:us-east-2:${local.account_id}:secret:apotterlab-origin-verify-??????"]
+  }
 }
 
 resource "aws_iam_role_policy" "terraform_plan_state_lock" {

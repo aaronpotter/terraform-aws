@@ -63,9 +63,14 @@ resource "aws_iam_role_policy" "app_db_secret" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = "secretsmanager:GetSecretValue"
-      Resource = aws_secretsmanager_secret.app_db_user.arn
+      Effect = "Allow"
+      Action = "secretsmanager:GetSecretValue"
+      Resource = [
+        aws_secretsmanager_secret.app_db_user.arn,
+        # X-Origin-Verify value, created in apps/ (cloudfront.tf). Secrets Manager appends 6 random
+        # characters to the ARN; matching by pattern avoids a cross-stack dependency.
+        "arn:aws:secretsmanager:us-east-2:${data.aws_caller_identity.current.account_id}:secret:apotterlab-origin-verify-??????",
+      ]
     }]
   })
 }

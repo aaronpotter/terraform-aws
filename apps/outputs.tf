@@ -22,3 +22,13 @@ output "github_ecr_push_role_arn" {
   description = "Role the kubernetes-deploy build job assumes to push to hello-world."
   value       = aws_iam_role.github_ecr_push.arn
 }
+
+output "cloudfront_domain_name" {
+  description = "Public URL for the app (https://<this>). The only way to reach it once the app enforces X-Origin-Verify."
+  value       = aws_cloudfront_distribution.app.domain_name
+}
+
+output "origin_verify_secret_name" {
+  description = "Secrets Manager secret with the raw X-Origin-Verify value; the app's chart reads it (originVerify.secretId)."
+  value       = aws_secretsmanager_secret.origin_verify.name
+}
