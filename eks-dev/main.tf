@@ -137,11 +137,12 @@ resource "aws_eks_cluster" "main" {
   role_arn = aws_iam_role.cluster.arn
 
   vpc_config {
-    subnet_ids             = aws_subnet.public[*].id
-    endpoint_public_access = true
-    # Nodes reach the API from inside the VPC; their public IPs aren't in public_access_cidrs.
+    subnet_ids = aws_subnet.public[*].id
+    # The public endpoint is open to any address so GitHub-hosted runners (thousands of changing IPs)
+    # can reach it; every request still needs IAM auth and an EKS access entry.
+    endpoint_public_access  = true
     endpoint_private_access = true
-    public_access_cidrs     = [var.admin_cidr]
+    public_access_cidrs     = ["0.0.0.0/0"]
   }
 
   access_config {
