@@ -136,3 +136,15 @@ variable "deploy_role_arn" {
   type        = string
   default     = "arn:aws:iam::549610932637:role/github-actions-deploy"
 }
+
+variable "app_db_user_secret_version" {
+  description = "Bump to write a new random password to the app_user secret (it's write-only, so Terraform can't see drift)."
+  type        = number
+  default     = 1
+}
+
+variable "app_migrate_service_account" {
+  description = "ServiceAccount the chart's migration Job runs as (created by the chart). The only identity allowed to read the master DB secret."
+  type        = string
+  default     = "hello-world-migrate"
+}
