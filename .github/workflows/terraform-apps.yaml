@@ -5,8 +5,17 @@ name: "Terraform Apps"
 # production-plan), apply on merge to main after approval in the production environment.
 
 on:
-  # Manual runs plan only.
+  # Manual runs plan; with action=apply (from main) they also apply, after approval.
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'plan only, or plan then apply (main only; waits for approval in production)'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
   # Path filtering happens in the changes job, not here, so the plan check always reports.
   pull_request:
     branches:
@@ -112,7 +121,10 @@ jobs:
       group: apps-apply
       cancel-in-progress: false
     needs: plan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # On merge to main, or a manual run with action=apply. The fallback exists because GitHub
+    # occasionally creates no push run for a merge (it happened for #24 and #27). The production
+    # environment still limits this to main and requires approval.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply'))
     runs-on: ubuntu-latest
     # AWS_ROLE_ARN here is terraform-apply; main only, required reviewer.
     environment: production
