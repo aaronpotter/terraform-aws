@@ -1,8 +1,17 @@
 name: "Terraform Multi-Environment Pipeline"
 
 on:
-  # Manual runs plan production and never apply.
+  # Manual runs plan production; with action=apply (from main) they also apply, after approval.
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'plan only, or plan then apply (main only; waits for approval in production)'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
   # Path filtering happens in the changes job, not here (see below).
   pull_request:
     branches:
@@ -116,7 +125,10 @@ jobs:
     name: "Terraform Apply - Production"
     needs: plan
     # Only run on pushes (merges) to the main branch
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # On merge to main, or a manual run with action=apply. The fallback exists because GitHub
+    # occasionally creates no push run for a merge (it happened for #24 and #27). The production
+    # environment still limits this to main and requires approval.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply'))
     runs-on: ubuntu-latest
     environment: production # Uses GitHub Environment protection rules
 

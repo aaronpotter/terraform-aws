@@ -18,7 +18,7 @@ terraform plan -var-file=environments/production/terraform.tfvars -var ssh_cidr=
 
 The bucket name and region in `bootstrap/variables.tf` must match the `backend "s3"` block in `terraform.tf`. That block has no default `key`, so `terraform init` must always be given an environment's `backend.tfvars`.
 
-Production is the only environment for the root module. CI applies it when changes merge to `main`. PR and manual runs only plan it, using the unprotected `production-plan` GitHub environment. The apply uses `production`, which requires approval and only deploys from `main`. `production-plan` sets `AWS_ROLE_ARN` to `terraform-plan`, and `production` sets it to `terraform-apply`.
+Production is the only environment for the root module. CI applies it when changes merge to `main`. If GitHub doesn't start a run for a merge (it happens occasionally), run the workflow manually from `main` with `action: apply`. It still waits for approval in `production`. PR and manual runs only plan it, using the unprotected `production-plan` GitHub environment. The apply uses `production`, which requires approval and only deploys from `main`. `production-plan` sets `AWS_ROLE_ARN` to `terraform-plan`, and `production` sets it to `terraform-apply`.
 
 ## Changes go through PRs
 
@@ -139,7 +139,7 @@ Resources that were first created by hand, and brought under Terraform with `imp
 - **After recreating the cluster**, the load balancer hostname changes. Update `origin_domain` in `apps/terraform.tfvars` (`kubectl -n production get svc hello-world -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'`) and apply. Until then, CloudFront returns 502/504.
 - The CloudFront-to-load-balancer hop is unencrypted, including the header, because the in-tree load balancer only listens on HTTP.
 
-**CI** (`terraform-apps.yaml`): same flow as the root module. `Apps Plan` runs on PRs with the read-only role in `production-plan`. On merge, `Terraform Apply - Apps` waits for approval in `production`. The Lambda zip is built during plan and uploaded with the saved plan, so the apply deploys exactly what was planned. Drift detection covers this stack too.
+**CI** (`terraform-apps.yaml`): same flow as the root module. `Apps Plan` runs on PRs with the read-only role in `production-plan`. On merge, `Terraform Apply - Apps` waits for approval in `production`. If a merge doesn't start a run, run the workflow manually from `main` with `action: apply`. The Lambda zip is built during plan and uploaded with the saved plan, so the apply deploys exactly what was planned. Drift detection covers this stack too.
 
 This module uses **AWS provider 6.x**. The other modules are on 5.x, which rejects the `python3.14` runtime.
 
