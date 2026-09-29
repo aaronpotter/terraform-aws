@@ -142,3 +142,9 @@ variable "app_db_user_secret_version" {
   type        = number
   default     = 1
 }
+
+variable "app_migrate_service_account" {
+  description = "ServiceAccount the chart's migration Job runs as (created by the chart). The only identity allowed to read the master DB secret."
+  type        = string
+  default     = "hello-world-migrate"
+}

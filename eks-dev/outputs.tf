@@ -52,3 +52,8 @@ output "app_db_user_secret_arn" {
   description = "ARN of the app_user credentials secret."
   value       = aws_secretsmanager_secret.app_db_user.arn
 }
+
+output "app_migrate_db_secret_role_arn" {
+  description = "Pod Identity role for the migration ServiceAccount; reads the master and app_user secrets."
+  value       = aws_iam_role.app_migrate_db_secret.arn
+}
