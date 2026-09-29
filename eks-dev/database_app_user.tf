@@ -1,29 +1,24 @@
 # Credentials for a least-privilege PostgreSQL role, app_user, used by the kubernetes-deploy app in
 # place of the master user. The chart's migration Job (running as the master user) creates the role
-# and grants it DML from these values. Terraform only creates the secret.
+# and grants it DML from these values.
 #
-# The password is ephemeral and written through a write-only attribute, so it never lands in
-# Terraform state or this repo. To rotate it, bump app_db_user_secret_version and apply, then rerun
-# the migration Job so the database role matches.
-
-ephemeral "random_password" "app_db_user" {
-  length  = 40
-  special = false
-}
+# Terraform manages the secret but NOT its value: refreshing a secret *version* calls
+# GetSecretValue, which the read-only CI plan role (terraform-plan) can't and shouldn't do. The value
+# was set once (40 random alphanumeric characters) and is rotated outside Terraform; see README.
 
 resource "aws_secretsmanager_secret" "app_db_user" {
   name        = "${var.cluster_name}-postgres-app-user"
   description = "Least-privilege PostgreSQL login (app_user) for ${var.app_namespace}/${var.app_service_account}."
 }
 
-resource "aws_secretsmanager_secret_version" "app_db_user" {
-  secret_id = aws_secretsmanager_secret.app_db_user.id
+# The version that first set the value was managed here. Forget it without deleting it, so the
+# current password stays in place and plans no longer need to read it.
+removed {
+  from = aws_secretsmanager_secret_version.app_db_user
 
-  secret_string_wo = jsonencode({
-    username = "app_user"
-    password = ephemeral.random_password.app_db_user.result
-  })
-  secret_string_wo_version = var.app_db_user_secret_version
+  lifecycle {
+    destroy = false
+  }
 }
 
 # ------------------------------------------------------------------
