@@ -125,24 +125,6 @@ variable "app_namespace" {
   default     = "production"
 }
 
-variable "app_service_account" {
-  description = "ServiceAccount the app's pods run as (created by the Helm chart). Pod Identity maps it to the DB-secret role."
-  type        = string
-  default     = "hello-world"
-}
-
-variable "deploy_role_arn" {
-  description = "IAM role the kubernetes-deploy workflow uses for helm; gets edit access in app_namespace only."
-  type        = string
-  default     = "arn:aws:iam::549610932637:role/github-actions-deploy"
-}
-
-variable "app_migrate_service_account" {
-  description = "ServiceAccount the chart's migration Job runs as (created by the chart). The only identity allowed to read the master DB secret."
-  type        = string
-  default     = "hello-world-migrate"
-}
-
 variable "secplus_service_account" {
   description = "ServiceAccount the Security+ exam pods run as (created by its Helm chart). Pod Identity maps it to a role that reads only that app's secrets."
   type        = string
