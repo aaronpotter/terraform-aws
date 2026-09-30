@@ -16,18 +16,7 @@ variable "secplus_github_subjects" {
 }
 
 variable "secplus_domain" {
-  description = "Public hostname for the Security+ exam, e.g. securityplus.turbocerts.com. When set, an ACM certificate for it is requested (DNS validation; the validation CNAME is added by hand in Cloudflare, since that DNS zone isn't managed here). Empty disables the custom domain."
+  description = "The only hostname the Security+ exam is served on, e.g. securityplus.turbocerts.com. It becomes the distribution's alias (using the imported *.turbocerts.com certificate), and a CloudFront Function returns 403 for any other Host, including the default *.cloudfront.net name. Empty serves the default cloudfront.net name with no restriction."
   type        = string
   default     = ""
-}
-
-variable "secplus_domain_active" {
-  description = "Attach secplus_domain to the CloudFront distribution and reject any other Host. Set to true only after the certificate's validation record exists in DNS (apply waits for the certificate to be issued) and the site CNAME points at the distribution."
-  type        = bool
-  default     = false
-
-  validation {
-    condition     = !var.secplus_domain_active || var.secplus_domain != ""
-    error_message = "secplus_domain_active requires secplus_domain."
-  }
 }

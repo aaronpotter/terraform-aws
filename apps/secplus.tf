@@ -174,37 +174,35 @@ data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
 }
 
 # ------------------------------------------------------------------
-# Custom domain: certificate, and a Host check so ONLY that domain works
+# Custom domain: imported wildcard certificate, and a Host check so ONLY that domain works
 # ------------------------------------------------------------------
-# DNS for the domain lives in Cloudflare (not managed here). Two records are added by hand:
-#   1. the certificate's validation CNAME (see output secplus_certificate_validation_records)
-#   2. <secplus_domain> CNAME <distribution domain>, as "DNS only" (not proxied)
+# DNS for turbocerts.com lives in Cloudflare (not managed here). The certificate below was created
+# and validated by hand; it is imported so Terraform tracks it and keeps the distribution's alias
+# and certificate from drifting.
 
-resource "aws_acm_certificate" "secplus" {
-  count    = var.secplus_domain != "" ? 1 : 0
+import {
+  provider = aws.us_east_1
+  to       = aws_acm_certificate.turbocerts
+  id       = "arn:aws:acm:us-east-1:549610932637:certificate/18f660ae-302f-403e-8c93-722e628c0915"
+}
+
+# CloudFront only accepts certificates from us-east-1. A wildcard, so other turbocerts.com
+# subdomains can reuse it: don't destroy it casually.
+resource "aws_acm_certificate" "turbocerts" {
   provider = aws.us_east_1
 
-  domain_name       = var.secplus_domain
+  domain_name       = "*.turbocerts.com"
   validation_method = "DNS"
 
   lifecycle {
-    create_before_destroy = true
+    prevent_destroy = true
   }
-}
-
-# Without validation_record_fqdns this simply waits for the certificate to be issued, so it only
-# exists once the validation CNAME is in DNS (secplus_domain_active).
-resource "aws_acm_certificate_validation" "secplus" {
-  count    = var.secplus_domain_active ? 1 : 0
-  provider = aws.us_east_1
-
-  certificate_arn = aws_acm_certificate.secplus[0].arn
 }
 
 # Viewer-request check: anything not addressed to the custom domain (notably the default
 # *.cloudfront.net name) gets 403 before it reaches the origin.
 resource "aws_cloudfront_function" "secplus_host_check" {
-  count = var.secplus_domain_active ? 1 : 0
+  count = var.secplus_domain != "" ? 1 : 0
 
   name    = "secplus-host-check"
   runtime = "cloudfront-js-2.0"
@@ -230,7 +228,7 @@ resource "aws_cloudfront_distribution" "secplus" {
   enabled         = true
   is_ipv6_enabled = true
   price_class     = "PriceClass_100"
-  aliases         = var.secplus_domain_active ? [var.secplus_domain] : []
+  aliases         = var.secplus_domain != "" ? [var.secplus_domain] : []
 
   origin {
     origin_id   = "secplus-lb"
@@ -263,7 +261,7 @@ resource "aws_cloudfront_distribution" "secplus" {
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
 
     dynamic "function_association" {
-      for_each = var.secplus_domain_active ? [1] : []
+      for_each = var.secplus_domain != "" ? [1] : []
       content {
         event_type   = "viewer-request"
         function_arn = aws_cloudfront_function.secplus_host_check[0].arn
@@ -278,9 +276,9 @@ resource "aws_cloudfront_distribution" "secplus" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = var.secplus_domain_active ? null : true
-    acm_certificate_arn            = var.secplus_domain_active ? aws_acm_certificate_validation.secplus[0].certificate_arn : null
-    ssl_support_method             = var.secplus_domain_active ? "sni-only" : null
-    minimum_protocol_version       = var.secplus_domain_active ? "TLSv1.2_2021" : null
+    cloudfront_default_certificate = var.secplus_domain != "" ? null : true
+    acm_certificate_arn            = var.secplus_domain != "" ? aws_acm_certificate.turbocerts.arn : null
+    ssl_support_method             = var.secplus_domain != "" ? "sni-only" : null
+    minimum_protocol_version       = var.secplus_domain != "" ? "TLSv1.2_2021" : null
   }
 }
