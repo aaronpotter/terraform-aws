@@ -9,7 +9,7 @@
 # ------------------------------------------------------------------
 # DB login for the app: least-privilege role, own database
 # ------------------------------------------------------------------
-# Terraform manages the secret but NOT its value (same reason as app_db_user: the read-only plan role
+# Terraform manages the secret but NOT its value (the read-only plan role
 # can't read secret values). Set it once, JSON with keys username, password, host, dbname, port:
 #   aws secretsmanager put-secret-value --secret-id apotterlab-postgres-securityplus-user \
 #     --secret-string file://secret.json     # password: 40 random alphanumeric characters

@@ -1,8 +1,8 @@
-# Access for the kubernetes-deploy app (Helm chart deployed by GitHub Actions):
-# - Pod Identity so its pods can read the RDS master password from Secrets Manager.
-# - The app namespace, created here so the deploy role needs no cluster-scoped rights.
-# - EKS access entries: deploy role (edit, app namespace only) and Terraform's own CI roles, which
-#   need in-cluster access now that this module manages a Kubernetes object.
+# Shared cluster access for apps in the app namespace (currently the Security+ exam, see secplus.tf):
+# - The Pod Identity agent add-on, so pods can read Secrets Manager without static keys.
+# - The app namespace, created here so deploy roles need no cluster-scoped rights.
+# - EKS access entries for Terraform's own CI roles, which need in-cluster access now that this
+#   module manages a Kubernetes object.
 # Everything tied to the cluster exists only while var.enabled is true.
 
 locals {
@@ -25,7 +25,7 @@ provider "kubernetes" {
 }
 
 # ------------------------------------------------------------------
-# Pod Identity: app pods read the DB master secret
+# Pod Identity agent (roles and associations are defined per app)
 # ------------------------------------------------------------------
 
 resource "aws_eks_addon" "pod_identity_agent" {
@@ -36,52 +36,6 @@ resource "aws_eks_addon" "pod_identity_agent" {
 
   # The agent runs as a DaemonSet, so it needs a node to land on.
   depends_on = [aws_eks_node_group.main]
-}
-
-resource "aws_iam_role" "app_db_secret" {
-  name        = "${var.cluster_name}-${var.app_service_account}-db-secret"
-  description = "Pod Identity role for ${var.app_namespace}/${var.app_service_account}: read the app_user DB secret."
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "pods.eks.amazonaws.com" }
-      Action    = ["sts:AssumeRole", "sts:TagSession"]
-    }]
-  })
-}
-
-# The secret uses the default aws/secretsmanager key, so no kms:Decrypt is needed.
-# The app reads only its least-privilege app_user secret. The master secret is readable only by the
-# migration role (database_app_user.tf). The policy keeps its original name so this change updates
-# it in place; renaming would replace it and briefly cut the pods' access.
-resource "aws_iam_role_policy" "app_db_secret" {
-  name = "read-db-master-secret"
-  role = aws_iam_role.app_db_secret.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = "secretsmanager:GetSecretValue"
-      Resource = [
-        aws_secretsmanager_secret.app_db_user.arn,
-        # X-Origin-Verify value, created in apps/ (cloudfront.tf). Secrets Manager appends 6 random
-        # characters to the ARN; matching by pattern avoids a cross-stack dependency.
-        "arn:aws:secretsmanager:us-east-2:${data.aws_caller_identity.current.account_id}:secret:apotterlab-origin-verify-??????",
-      ]
-    }]
-  })
-}
-
-resource "aws_eks_pod_identity_association" "app" {
-  count = var.enabled ? 1 : 0
-
-  cluster_name    = aws_eks_cluster.main[0].name
-  namespace       = var.app_namespace
-  service_account = var.app_service_account
-  role_arn        = aws_iam_role.app_db_secret.arn
 }
 
 # ------------------------------------------------------------------
@@ -117,29 +71,6 @@ resource "kubernetes_namespace_v1" "app_ns" {
 # ------------------------------------------------------------------
 # EKS access entries
 # ------------------------------------------------------------------
-
-# kubernetes-deploy's workflow: helm upgrade --install into the app namespace only. The "edit" policy
-# covers Deployments, Services, ServiceAccounts, ConfigMaps and Secrets (Helm's release records), but
-# not Roles/RoleBindings or anything cluster-scoped.
-resource "aws_eks_access_entry" "deploy" {
-  count = var.enabled ? 1 : 0
-
-  cluster_name  = aws_eks_cluster.main[0].name
-  principal_arn = var.deploy_role_arn
-}
-
-resource "aws_eks_access_policy_association" "deploy" {
-  count = var.enabled ? 1 : 0
-
-  cluster_name  = aws_eks_cluster.main[0].name
-  principal_arn = aws_eks_access_entry.deploy[0].principal_arn
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy"
-
-  access_scope {
-    type       = "namespace"
-    namespaces = [var.app_namespace]
-  }
-}
 
 # Terraform's apply role creates the namespace (cluster-scoped), so it needs cluster admin.
 resource "aws_eks_access_entry" "ci_apply" {
