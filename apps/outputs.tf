@@ -32,3 +32,14 @@ output "secplus_origin_verify_secret_name" {
   description = "Secrets Manager secret with the raw X-Origin-Verify value for the Security+ exam."
   value       = aws_secretsmanager_secret.secplus_origin_verify.name
 }
+
+output "secplus_certificate_validation_records" {
+  description = "DNS records to create in Cloudflare (DNS only) so ACM can validate the Security+ exam certificate. Null when secplus_domain is unset."
+  value = var.secplus_domain == "" ? null : [
+    for d in aws_acm_certificate.secplus[0].domain_validation_options : {
+      name  = d.resource_record_name
+      type  = d.resource_record_type
+      value = d.resource_record_value
+    }
+  ]
+}

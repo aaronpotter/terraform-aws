@@ -4,3 +4,8 @@ secplus_github_subjects = ["repo:aaronpotter@9371584/securityplus-exam@139659190
 
 # Security+ exam's load balancer (Service production/security-plus-exam). Changes when the cluster is recreated.
 secplus_origin_domain = "a6d723e779590422a8e64874c498e78f-498420622.us-east-2.elb.amazonaws.com"
+
+# Custom domain: phase 1 requests the certificate. Set secplus_domain_active = true only after the
+# validation CNAME (terraform output secplus_certificate_validation_records) exists in Cloudflare.
+secplus_domain        = "securityplus.turbocerts.com"
+secplus_domain_active = false
