@@ -41,7 +41,7 @@ resource "aws_ecr_lifecycle_policy" "security_plus_exam" {
 # ------------------------------------------------------------------
 # CI roles (created only once var.secplus_github_subjects is set)
 # ------------------------------------------------------------------
-# Two roles, as for kubernetes-deploy: the build job may only push to this app's ECR repo, and only
+# Two roles: the build job may only push to this app's ECR repo, and only
 # the production environment may deploy (see the EKS access entry in eks-dev/secplus.tf).
 
 resource "aws_iam_role" "secplus_ecr_push" {

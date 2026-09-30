@@ -73,15 +73,12 @@ kubectl run psql --rm -it --restart=Never --image=postgres:18 --env=PGPASSWORD="
 
 ### App access (`eks-dev/app_access.tf`)
 
-Access for the `kubernetes-deploy` repo's app, a Helm chart deployed by GitHub Actions. Everything tied to the cluster exists only while `enabled = true`.
+Shared cluster access, plus the Security+ exam's own roles and secrets in `eks-dev/secplus.tf`. Everything tied to the cluster exists only while `enabled = true`.
 
 | Piece | Details |
 |---|---|
-| Namespace `production` | Created by Terraform through the `kubernetes` provider, so the deploy role needs no cluster-scoped rights. The workflow must **not** pass `--create-namespace`. |
-| Pod Identity | The `eks-pod-identity-agent` addon, plus role `apotterlab-hello-world-db-secret` (trusted by `pods.eks.amazonaws.com`, `secretsmanager:GetSecretValue` on the **app_user secret only**), associated with ServiceAccount `production/hello-world`. The chart creates the ServiceAccount. |
-| App database login | Secret `apotterlab-postgres-app-user` holds `{"username":"app_user","password":…}` for a least-privilege role that the chart's migration Job creates. Terraform manages the secret but **not its value**. Refreshing a secret version needs `GetSecretValue`, which the read-only CI plan role can't do. To rotate: `aws secretsmanager put-secret-value --secret-id apotterlab-postgres-app-user --secret-string "$(python3 -c 'import json,secrets,string; a=string.ascii_letters+string.digits; print(json.dumps({"username":"app_user","password":"".join(secrets.choice(a) for _ in range(40))}))')"` (as break-glass), then **immediately** trigger a kubernetes-deploy deploy. Its pre-upgrade migration hook runs `ALTER ROLE app_user … PASSWORD` from the secret on every deploy. Until it runs, **new** app connections fail to authenticate; existing ones stay valid, and the app drops its cached secret on an auth failure. The app's Pod Identity role can read only this secret. |
-| Migration identity | Role `apotterlab-hello-world-migrate-db-secret`, associated with ServiceAccount `production/hello-world-migrate` (created by the chart's migration hook). It reads the master and app_user secrets to create `app_user`. It's the **only** identity that can read the master secret. |
-| Access entry `github-actions-deploy` | `AmazonEKSEditPolicy` scoped to the `production` namespace: Deployments, Services, ServiceAccounts, ConfigMaps and Secrets (Helm's release records). It can't create Roles/RoleBindings or cluster-scoped objects. |
+| Namespace `production` | Created by Terraform through the `kubernetes` provider, so deploy roles need no cluster-scoped rights. Workflows must **not** pass `--create-namespace`. |
+| Pod Identity | The `eks-pod-identity-agent` addon. Each app gets its own role and association (see below). |
 | Access entries for Terraform's CI roles | `terraform-apply` gets cluster admin, which creating the namespace needs. `terraform-plan` gets `AmazonEKSViewPolicy`, which PR plans and nightly drift use to read it. |
 
 The `kubernetes` provider authenticates with `aws eks get-token` as whoever runs Terraform, so a local plan or apply needs the `aws` CLI and an identity with an access entry.
@@ -130,13 +127,13 @@ Resources that were first created by hand, and brought under Terraform with `imp
 |---|---|
 | Lambda `s3-trigger-unzip` (Python 3.14) + role `lambda-s3-trigger-role` + policy `s3-trigger` + log group | A `.gz` object in `apotter-lambda-input` is decompressed into `apotter-lambda-output`, then deleted from the input bucket. **The code lives in `apps/lambda/s3-trigger-unzip/`** and deploys through Terraform. |
 | Buckets `apotter-lambda-input`, `-output`, `-scripts` | SSE-S3, public access blocked, ACLs disabled. The input bucket's `.gz` object-created notification triggers the Lambda. |
-| ECR `hello-world` | Immutable tags, scan on push. A lifecycle policy keeps the 20 newest **tagged** images. Untagged images stay, because they're the manifests inside multi-arch indexes like `latest`. The `kubernetes-deploy` repo pushes images here. |
-| Role `github-actions-ecr-push` | Build job for `kubernetes-deploy`, trusted only for `ref:refs/heads/main`. It can push to and read `hello-world` only (plus `ecr:GetAuthorizationToken`). |
-| Role `github-actions-deploy` | OIDC role for `aaronpotter/kubernetes-deploy`'s deploy-production job: `eks:DescribeCluster`, plus namespace-scoped edit in the cluster (see eks-dev "App access"). No ECR access. Trust is pinned to that repo's IDs and **only** `environment:production`. |
+| ECR `security-plus-exam` (`secplus.tf`) | Immutable tags, scan on push. A lifecycle policy keeps the 20 newest **tagged** images. Untagged images stay, because they're the manifests inside multi-arch indexes. Pushed by the app repo's build job. |
+| Role `github-actions-secplus-ecr-push` | Build job for `aaronpotter/securityplus-exam`, trusted only for `ref:refs/heads/main`. It can push to and read `security-plus-exam` only (plus `ecr:GetAuthorizationToken`). Created once `secplus_github_subjects` is set. |
+| Role `github-actions-secplus-deploy` | Deploy job for `aaronpotter/securityplus-exam`: `eks:DescribeCluster`, plus namespace-scoped edit in the cluster (see eks-dev). Trust is pinned to the repo's IDs and **only** `environment:production`. |
 
-**CloudFront** (`cloudfront.tf`): the app is served at the distribution's `cloudfront_domain_name` output over HTTPS (default `*.cloudfront.net` certificate, `PriceClass_100`, IPv6, never cached, all methods allowed). CloudFront forwards to the Kubernetes-created load balancer over HTTP with an `X-Origin-Verify` header. The app rejects any request without it, so the raw load balancer URL returns 403.
-- The header value is a `random_password`, stored in Secrets Manager as `apotterlab-origin-verify` (the raw value, not JSON). The app reads it through its Pod Identity role. It's also in CloudFront's config, so it's in **apps state**. Plans show it as sensitive. `terraform-plan` can read this one secret, because refreshing it needs `GetSecretValue`, and the value is in state anyway.
-- **After recreating the cluster**, the load balancer hostname changes. Update `origin_domain` in `apps/terraform.tfvars` (`kubectl -n production get svc hello-world -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'`) and apply. Until then, CloudFront returns 502/504.
+**CloudFront** (`secplus.tf`): the Security+ exam is served at the `secplus_cloudfront_domain_name` output over HTTPS (default `*.cloudfront.net` certificate, `PriceClass_100`, IPv6, never cached, all methods allowed). It exists only while `secplus_origin_domain` is set. CloudFront forwards to the Kubernetes-created load balancer (`secplus_origin_domain` in `apps/terraform.tfvars`) and adds an `X-Origin-Verify` header that the app requires, so the load balancer can't be used directly.
+- The header value is a `random_password`, stored in Secrets Manager as `apotterlab-secplus-origin-verify` (the raw value, not JSON). The app reads it through its Pod Identity role. It's also in CloudFront's config, so it's in **apps state**. Plans show it as sensitive.
+- **After recreating the cluster**, the load balancer hostname changes. Update `secplus_origin_domain` in `apps/terraform.tfvars` (`kubectl -n production get svc security-plus-exam -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'`) and apply. Until then, CloudFront returns 502/504.
 - The CloudFront-to-load-balancer hop is unencrypted, including the header, because the in-tree load balancer only listens on HTTP.
 
 **CI** (`terraform-apps.yaml`): same flow as the root module. `Apps Plan` runs on PRs with the read-only role in `production-plan`. On merge, `Terraform Apply - Apps` waits for approval in `production`. If a merge doesn't start a run, run the workflow manually from `main` with `action: apply`. The Lambda zip is built during plan and uploaded with the saved plan, so the apply deploys exactly what was planned. Drift detection covers this stack too.
@@ -145,7 +142,6 @@ This module uses **AWS provider 6.x**. The other modules are on 5.x, which rejec
 
 **Known issues, left as they were imported:**
 - The Lambda log group keeps 30 days of logs.
-- `hello-world` has immutable tags, so a `latest` tag can't be moved after its first push.
 
 ## Drift detection
 

@@ -120,7 +120,7 @@ variable "db_username" {
 }
 
 variable "app_namespace" {
-  description = "Namespace the kubernetes-deploy app runs in. Created by Terraform."
+  description = "Namespace the apps run in. Created by Terraform."
   type        = string
   default     = "production"
 }
