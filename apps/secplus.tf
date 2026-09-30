@@ -1,6 +1,5 @@
 # Security+ practice exam (Node.js + PostgreSQL), deployed as its own Helm release into the
-# production namespace. Mirrors the hello-world pieces in ecr.tf, cloudfront.tf and
-# github_deploy.tf, but nothing here shares a role, repo, secret, or distribution with hello-world.
+# production namespace.
 
 # ------------------------------------------------------------------
 # Image repository
@@ -19,7 +18,8 @@ resource "aws_ecr_repository" "security_plus_exam" {
   }
 }
 
-# Same policy as hello-world: keep the 20 newest tagged images, leave untagged ones alone.
+# Keep the 20 newest tagged images. Untagged images are left alone: they are the platform/attestation
+# manifests inside multi-arch indexes, and expiring them would break those tags.
 resource "aws_ecr_lifecycle_policy" "security_plus_exam" {
   repository = aws_ecr_repository.security_plus_exam.name
 
@@ -154,7 +154,7 @@ resource "random_password" "secplus_origin_verify" {
 }
 
 # Raw header value (not JSON), read at runtime by the app pods. Name chosen so it does NOT match the
-# hello-world pattern "apotterlab-origin-verify-??????" in the existing IAM policies.
+# old "apotterlab-origin-verify-??????" pattern still present in account/github_oidc.tf.
 resource "aws_secretsmanager_secret" "secplus_origin_verify" {
   name        = "apotterlab-secplus-origin-verify"
   description = "Raw X-Origin-Verify header value CloudFront sends to the Security+ exam load balancer (not JSON)."
@@ -163,6 +163,14 @@ resource "aws_secretsmanager_secret" "secplus_origin_verify" {
 resource "aws_secretsmanager_secret_version" "secplus_origin_verify" {
   secret_id     = aws_secretsmanager_secret.secplus_origin_verify.id
   secret_string = random_password.secplus_origin_verify.result
+}
+
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
+}
+
+data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
+  name = "Managed-AllViewerExceptHostHeader"
 }
 
 resource "aws_cloudfront_distribution" "secplus" {
