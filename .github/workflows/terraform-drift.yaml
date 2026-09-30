@@ -49,9 +49,6 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
 
-    env:
-      TF_VAR_ssh_cidr: ${{ vars.SSH_CIDR }}
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
