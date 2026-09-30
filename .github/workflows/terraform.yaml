@@ -105,9 +105,6 @@ jobs:
 
       - name: Terraform Plan
         run: terraform plan -input=false -no-color -var-file=environments/${{ env.ENV_NAME }}/terraform.tfvars -out=tfplan
-        env:
-          # Kept out of the committed tfvars so an address never lands in the repo.
-          TF_VAR_ssh_cidr: ${{ vars.SSH_CIDR }}
 
       # The apply job applies exactly this file. It can hold variable values in
       # plain text, so keep retention short.

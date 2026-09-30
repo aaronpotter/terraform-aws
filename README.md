@@ -13,7 +13,7 @@ terraform apply        # creates tfstate bucket
 
 cd ..
 terraform init -backend-config=environments/production/backend.tfvars
-terraform plan -var-file=environments/production/terraform.tfvars -var ssh_cidr=<your-ip>/32
+terraform plan -var-file=environments/production/terraform.tfvars
 ```
 
 The bucket name and region in `bootstrap/variables.tf` must match the `backend "s3"` block in `terraform.tf`. That block has no default `key`, so `terraform init` must always be given an environment's `backend.tfvars`.
@@ -154,7 +154,7 @@ This module uses **AWS provider 6.x**. The other modules are on 5.x, which rejec
 - `account/` and `bootstrap/` aren't checked. They're applied by hand, and `bootstrap/` keeps its state locally.
 - GitHub disables scheduled workflows in public repos after 60 days without activity. Re-enable it from the Actions tab if that happens.
 
-The `drift` environment holds `AWS_ROLE_ARN` (`terraform-plan`) and `SSH_CIDR`.
+The `drift` environment holds `AWS_ROLE_ARN` (`terraform-plan`).
 
 ## Account guardrails (`account/`)
 
