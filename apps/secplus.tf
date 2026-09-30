@@ -173,6 +173,54 @@ data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
   name = "Managed-AllViewerExceptHostHeader"
 }
 
+# ------------------------------------------------------------------
+# Custom domain: imported wildcard certificate, and a Host check so ONLY that domain works
+# ------------------------------------------------------------------
+# DNS for turbocerts.com lives in Cloudflare (not managed here). The certificate below was created
+# and validated by hand; it is imported so Terraform tracks it and keeps the distribution's alias
+# and certificate from drifting.
+
+import {
+  provider = aws.us_east_1
+  to       = aws_acm_certificate.turbocerts
+  id       = "arn:aws:acm:us-east-1:549610932637:certificate/18f660ae-302f-403e-8c93-722e628c0915"
+}
+
+# CloudFront only accepts certificates from us-east-1. A wildcard, so other turbocerts.com
+# subdomains can reuse it: don't destroy it casually.
+resource "aws_acm_certificate" "turbocerts" {
+  provider = aws.us_east_1
+
+  domain_name       = "*.turbocerts.com"
+  validation_method = "DNS"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Viewer-request check: anything not addressed to the custom domain (notably the default
+# *.cloudfront.net name) gets 403 before it reaches the origin.
+resource "aws_cloudfront_function" "secplus_host_check" {
+  count = var.secplus_domain != "" ? 1 : 0
+
+  name    = "secplus-host-check"
+  runtime = "cloudfront-js-2.0"
+  comment = "Only serve ${var.secplus_domain}"
+  publish = true
+
+  code = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      var host = request.headers.host ? request.headers.host.value.toLowerCase() : "";
+      if (host !== "${lower(var.secplus_domain)}") {
+        return { statusCode: 403, statusDescription: "Forbidden" };
+      }
+      return request;
+    }
+  EOT
+}
+
 resource "aws_cloudfront_distribution" "secplus" {
   count = var.secplus_origin_domain != "" ? 1 : 0
 
@@ -180,6 +228,7 @@ resource "aws_cloudfront_distribution" "secplus" {
   enabled         = true
   is_ipv6_enabled = true
   price_class     = "PriceClass_100"
+  aliases         = var.secplus_domain != "" ? [var.secplus_domain] : []
 
   origin {
     origin_id   = "secplus-lb"
@@ -210,6 +259,14 @@ resource "aws_cloudfront_distribution" "secplus" {
     # Exam attempts are per-user API responses and must never be cached.
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+
+    dynamic "function_association" {
+      for_each = var.secplus_domain != "" ? [1] : []
+      content {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.secplus_host_check[0].arn
+      }
+    }
   }
 
   restrictions {
@@ -219,6 +276,9 @@ resource "aws_cloudfront_distribution" "secplus" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = var.secplus_domain != "" ? null : true
+    acm_certificate_arn            = var.secplus_domain != "" ? aws_acm_certificate.turbocerts.arn : null
+    ssl_support_method             = var.secplus_domain != "" ? "sni-only" : null
+    minimum_protocol_version       = var.secplus_domain != "" ? "TLSv1.2_2021" : null
   }
 }

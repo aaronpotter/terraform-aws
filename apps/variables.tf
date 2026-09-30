@@ -14,3 +14,9 @@ variable "secplus_github_subjects" {
   type        = list(string)
   default     = []
 }
+
+variable "secplus_domain" {
+  description = "The only hostname the Security+ exam is served on, e.g. securityplus.turbocerts.com. It becomes the distribution's alias (using the imported *.turbocerts.com certificate), and a CloudFront Function returns 403 for any other Host, including the default *.cloudfront.net name. Empty serves the default cloudfront.net name with no restriction."
+  type        = string
+  default     = ""
+}
