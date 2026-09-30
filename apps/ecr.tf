@@ -3,6 +3,10 @@ resource "aws_ecr_repository" "hello_world" {
   name                 = "hello-world"
   image_tag_mutability = "IMMUTABLE"
 
+  # Set first so a follow-up change can delete the repository with its images (Terraform refuses to
+  # destroy a non-empty repository otherwise).
+  force_delete = true
+
   image_scanning_configuration {
     scan_on_push = true
   }
