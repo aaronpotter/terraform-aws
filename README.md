@@ -95,7 +95,14 @@ kubectl get nodes
 
 ### Turning the cluster off and on
 
-`enabled` in `eks-dev/terraform.tfvars` is the switch. Set it to `false` and apply to remove the cluster, node group, and access entries, which stops the ~$3.10/day. The VPC, subnets, and IAM roles stay (they're free), so setting it back to `true` recreates the cluster in about 15 minutes.
+`enabled` in `eks-dev/terraform.tfvars` removes the cluster, node group, and access entries, which stops the ~$3.10/day. The VPC, subnets, RDS database, and IAM roles stay, so turning it back on recreates the cluster in about 15 minutes. Turning it **off takes two applies**, in this order:
+
+1. **`app_namespace_enabled = false`**, merge, and run the eks-dev apply. This deletes the `production` namespace while the cluster is still up: the app's Helm release goes, and Kubernetes removes the Service's AWS load balancer. The kubernetes provider needs the running cluster to do this.
+2. **`enabled = false`** (leave `app_namespace_enabled = false`), merge, and apply. This removes the cluster itself.
+
+Setting `enabled = false` first is refused by a variable validation. Without it, the plan would fail with `dial tcp [::1]:80: connection refused`, because the kubernetes provider has no cluster to connect to in that plan, and the load balancer would be orphaned.
+
+To turn it **on**, set both `enabled` and `app_namespace_enabled` to `true` in one change, apply, then redeploy the app's Helm release and update `secplus_origin_domain` (see Apps).
 
 `terraform destroy` is blocked on purpose: the VPC has `prevent_destroy`, so a stray destroy can't take down the whole module. If you really want to remove everything, delete that `lifecycle` block in a reviewed change first.
 

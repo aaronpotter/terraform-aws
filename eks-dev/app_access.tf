@@ -53,8 +53,11 @@ removed {
   }
 }
 
+# Deleting this namespace deletes everything the Helm releases deployed into it, including Services
+# of type LoadBalancer; Kubernetes then removes their AWS load balancers. That has to happen while the
+# cluster is up, so var.app_namespace_enabled is a separate switch, applied before var.enabled.
 resource "kubernetes_namespace_v1" "app_ns" {
-  count = var.enabled ? 1 : 0
+  count = var.enabled && var.app_namespace_enabled ? 1 : 0
 
   metadata {
     name = var.app_namespace

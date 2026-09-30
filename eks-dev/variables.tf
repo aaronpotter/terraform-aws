@@ -1,5 +1,16 @@
 variable "enabled" {
-  description = "Whether the EKS cluster, node group, and access entries exist. false removes them (~$3.10/day) and keeps the free VPC and IAM roles."
+  description = "Whether the EKS cluster, node group, and access entries exist. false removes them (~$3.10/day) and keeps the free VPC and IAM roles. Turn app_namespace_enabled off and apply first."
+  type        = bool
+  default     = true
+
+  validation {
+    condition     = var.enabled || !var.app_namespace_enabled
+    error_message = "Set app_namespace_enabled = false and apply it BEFORE setting enabled = false. The kubernetes provider needs the running cluster to delete the namespace (and, through its Services, the load balancers Kubernetes created); in the same plan as enabled = false it has no cluster to connect to."
+  }
+}
+
+variable "app_namespace_enabled" {
+  description = "Whether Terraform manages the app namespace. To turn the cluster off: set this to false and apply (deletes the namespace, its Helm release and its Service load balancers while the cluster is still up), then set enabled = false and apply. To turn it on, set both to true in one change."
   type        = bool
   default     = true
 }
