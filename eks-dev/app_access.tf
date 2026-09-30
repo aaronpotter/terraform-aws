@@ -88,7 +88,18 @@ resource "aws_eks_pod_identity_association" "app" {
 # App namespace
 # ------------------------------------------------------------------
 
-resource "kubernetes_namespace_v1" "app" {
+# The cluster was deleted outside Terraform, so the old address in state can't be refreshed (the
+# kubernetes provider has nothing to connect to). Forget it without destroying, and manage the
+# namespace under a new address on the recreated cluster.
+removed {
+  from = kubernetes_namespace_v1.app
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+resource "kubernetes_namespace_v1" "app_ns" {
   count = var.enabled ? 1 : 0
 
   metadata {
