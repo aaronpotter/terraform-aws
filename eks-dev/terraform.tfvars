@@ -1,10 +1,10 @@
 # Committed.
 
 # The on/off switch: false removes the cluster and node group (~$3.10/day), true brings them back.
-enabled = true
+# Turning off takes two applies: app_namespace_enabled = false first (deletes the namespace and its
+# load balancers while the cluster is up), then enabled = false. To turn on, set BOTH to true.
+enabled = false
 
-# Step 1 of turning the cluster off: false deletes the production namespace (and its load balancers)
-# while the cluster is still up. Step 2, after this is applied: enabled = false.
 app_namespace_enabled = false
 
 cluster_name = "apotterlab"
