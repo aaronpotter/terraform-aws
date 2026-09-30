@@ -1,7 +1,7 @@
 name: "Terraform Apps"
 
-# apps/: the s3-trigger-unzip Lambda and its buckets, the hello-world ECR repository, and the
-# github-actions-deploy role. Same flow as the root module: plan on every PR (read-only role via
+# apps/: the s3-trigger-unzip Lambda and its buckets, and the Security+ exam's ECR repository,
+# CloudFront distribution and CI roles. Same flow as the root module: plan on every PR (read-only role via
 # production-plan), apply on merge to main after approval in the production environment.
 
 on:

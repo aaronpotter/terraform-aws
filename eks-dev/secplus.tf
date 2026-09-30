@@ -1,6 +1,6 @@
 # Access for the Security+ exam app (Node.js + PostgreSQL), a second Helm release in app_namespace.
 # Same model as app_access.tf / database_app_user.tf, with its own database, DB role, secrets and
-# roles, so it shares nothing with hello-world except the RDS instance and the namespace.
+# roles, and shares only the RDS instance and the namespace with other apps.
 #
 # Bootstrapping inside PostgreSQL is not Terraform's job (RDS is private): the chart's migration Job,
 # running as the master user, creates database "securityplus" and role "securityplus_user" from the
@@ -109,7 +109,7 @@ resource "aws_eks_pod_identity_association" "secplus_migrate" {
 }
 
 # ------------------------------------------------------------------
-# Deploy access: edit in the app namespace only (same as the kubernetes-deploy role)
+# Deploy access: edit in the app namespace only
 # ------------------------------------------------------------------
 
 resource "aws_eks_access_entry" "secplus_deploy" {

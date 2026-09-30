@@ -8,11 +8,6 @@ output "unzip_buckets" {
   value       = { for k, b in aws_s3_bucket.unzip : k => b.id }
 }
 
-output "hello_world_repository_url" {
-  description = "ECR repository URL for docker push."
-  value       = aws_ecr_repository.hello_world.repository_url
-}
-
 output "secplus_repository_url" {
   description = "ECR repository URL for the Security+ exam image."
   value       = aws_ecr_repository.security_plus_exam.repository_url
