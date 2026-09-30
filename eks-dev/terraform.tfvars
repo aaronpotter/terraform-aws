@@ -3,6 +3,10 @@
 # The on/off switch: false removes the cluster and node group (~$3.10/day), true brings them back.
 enabled = true
 
+# Step 1 of turning the cluster off: false deletes the production namespace (and its load balancers)
+# while the cluster is still up. Step 2, after this is applied: enabled = false.
+app_namespace_enabled = false
+
 cluster_name = "apotterlab"
 # Free plan accounts reject non-free-tier types (t3.medium fails with InvalidParameterCombination).
 # t3.small: 2 GiB, 11 pods max; 4 go to system pods.

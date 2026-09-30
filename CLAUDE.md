@@ -51,6 +51,7 @@ terraform fmt -check -recursive && terraform validate
 - `gh run view --log` / `gh api .../logs` refuse output with ANSI codes; use `gh api --allow-escape-sequences ... | sed -E 's/\x1b\[[0-9;]*m//g'`.
 - **zsh** (the user's shell): `$VAR:role` is a modifier (`$A:r`) → write `${A}`; unquoted `$list` doesn't word-split → use `${=list}` or arrays. The local `grep` is a ugrep wrapper; use `/usr/bin/grep` for `-qv` logic.
 - Kubernetes `LoadBalancer` Services create Classic ELBs outside Terraform. Keep them in the Terraform-managed `production` namespace, or disabling the cluster orphans them (~$18/month each).
+- **Turning the cluster off takes two applies**: `app_namespace_enabled = false` first (deletes the namespace and its load balancers while the cluster is up), then `enabled = false`. A single `enabled = false` fails the plan (`dial tcp [::1]:80`): the kubernetes provider gets its host from the cluster resource, which that same plan removes. A validation on `enabled` enforces the order. To turn it on, set both to true together.
 - After a cluster recreate, the Service LB hostname changes: update `secplus_origin_domain` in `apps/terraform.tfvars` via PR or CloudFront returns 502/504.
 - The Security+ app role must never read the RDS master secret; only the migrate role (`secplus_migrate_service_account`) can.
 - Removing a policy/resource by renaming it causes replacement (brief access loss); keep names stable for in-place updates.
