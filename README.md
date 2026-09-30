@@ -1,6 +1,6 @@
 # terraform-aws
 
-A production EC2 lab instance in its own VPC, plus an on-demand EKS dev cluster (`eks-dev/`), with Terraform state in S3.
+A production VPC (root module), an on-demand EKS dev cluster with PostgreSQL (`eks-dev/`), app resources (`apps/`), and account guardrails (`account/`), with Terraform state in S3.
 
 ## First-time setup
 
@@ -22,13 +22,13 @@ Production is the only environment for the root module. CI applies it when chang
 
 ## Changes go through PRs
 
-`main` is protected by a ruleset: every change needs a pull request, and the `Main Plan` and `EKS Dev Plan` checks must pass. Each workflow's `Detect Changes` job skips its plan when the PR doesn't touch that workflow's files. A skipped plan still counts as passing, so docs-only PRs aren't blocked.
+`main` is protected by a ruleset: every change needs a pull request, and the `Main Plan`, `EKS Dev Plan`, and `Apps Plan` checks must pass. Each workflow's `Detect Changes` job skips its plan when the PR doesn't touch that workflow's files. A skipped plan still counts as passing, so docs-only PRs aren't blocked.
 
 
 ## Resource tags
 
-Every module's AWS provider sets `default_tags`, so every taggable resource carries `ManagedBy = terraform`, `Repo = aaronpotter/terraform-aws`, and `Stack` (`root`, `eks-dev`, `account`, or `bootstrap`). If you find a tagged resource in the console, change it in code, not by hand, or the nightly drift check will flag it (for `root` and `eks-dev`).
-=======
+Every module's AWS provider sets `default_tags`, so every taggable resource carries `ManagedBy = terraform`, `Repo = aaronpotter/terraform-aws`, and `Stack` (`root`, `eks-dev`, `apps`, `account`, or `bootstrap`). If you find a tagged resource in the console, change it in code, not by hand, or the nightly drift check will flag it (for `root`, `eks-dev`, and `apps`).
+
 ## State bucket protection (`bootstrap/`)
 
 The state bucket's policy limits writes even for account admins. `aws:PrincipalArn` is checked against these lists:
@@ -145,12 +145,12 @@ This module uses **AWS provider 6.x**. The other modules are on 5.x, which rejec
 
 ## Drift detection
 
-`.github/workflows/terraform-drift.yaml` runs daily at 12:00 UTC, and on demand from `main`. It uses the `drift` environment, which is limited to `main` and assumes the read-only `terraform-plan` role. It runs `terraform plan -detailed-exitcode` for `production` and `eks-dev`.
+`.github/workflows/terraform-drift.yaml` runs daily at 12:00 UTC, and on demand from `main`. It uses the `drift` environment, which is limited to `main` and assumes the read-only `terraform-plan` role. It runs `terraform plan -detailed-exitcode` for `production`, `eks-dev`, and `apps`.
 
 - **No changes:** the run passes.
 - **Changes** (something changed outside Terraform, or a merged change hasn't been applied yet): the run fails, and a `drift` issue named `Drift detected: <stack>` is opened, or commented on if it's already open. Reconcile by applying the merged change, putting the manual change in code, or reverting it in AWS.
 - **The next clean run for that stack closes its open issue automatically,** with a comment linking the run.
-- The logs and the issue show only resource addresses and the plan summary. This repo's Actions logs are public, and full plans can contain values like the SSH CIDR.
+- The logs and the issue show only resource addresses and the plan summary. This repo's Actions logs are public, and full plans can contain values that shouldn't be published.
 - `account/` and `bootstrap/` aren't checked. They're applied by hand, and `bootstrap/` keeps its state locally.
 - GitHub disables scheduled workflows in public repos after 60 days without activity. Re-enable it from the Actions tab if that happens.
 
