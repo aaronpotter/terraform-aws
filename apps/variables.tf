@@ -20,3 +20,9 @@ variable "secplus_domain" {
   type        = string
   default     = ""
 }
+
+variable "secplus_apex_domain" {
+  description = "Apex hostname served by a second distribution to the same origin, e.g. turbocerts.com (certificate: the imported apex cert). Required: the apex distribution always exists."
+  type        = string
+  default     = ""
+}
