@@ -7,3 +7,6 @@ secplus_origin_domain = "a2aa53d85c6e74736a40d316db744db2-1991571986.us-east-2.e
 
 # The only hostname the Security+ exam answers to. DNS (Cloudflare) CNAMEs it to the distribution.
 secplus_domain = "securityplus.turbocerts.com"
+
+# Apex served by its own distribution (E19LJGLXCXBSC9, imported). DNS (Cloudflare) CNAMEs it to that distribution.
+secplus_apex_domain = "turbocerts.com"

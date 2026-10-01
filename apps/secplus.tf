@@ -282,3 +282,104 @@ resource "aws_cloudfront_distribution" "secplus" {
     minimum_protocol_version       = var.secplus_domain != "" ? "TLSv1.2_2021" : null
   }
 }
+
+# ------------------------------------------------------------------
+# Apex domain (turbocerts.com): second distribution, same origin
+# ------------------------------------------------------------------
+# Created by hand in the console ("For TurboCerts home site"), then imported here and brought in line
+# with the subdomain distribution: HTTP to the origin, X-Origin-Verify header, no caching, Host check.
+# CloudFront takes one certificate per distribution, so the apex has its own (the wildcard above does
+# not cover it). Both are created and validated by hand and imported.
+
+import {
+  provider = aws.us_east_1
+  to       = aws_acm_certificate.turbocerts_apex
+  id       = "arn:aws:acm:us-east-1:549610932637:certificate/73f4c4bb-982b-4178-a32b-3489f90b3a56"
+}
+
+resource "aws_acm_certificate" "turbocerts_apex" {
+  provider = aws.us_east_1
+
+  domain_name       = "turbocerts.com"
+  validation_method = "DNS"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+import {
+  to = aws_cloudfront_distribution.secplus_apex
+  id = "E19LJGLXCXBSC9"
+}
+
+resource "aws_cloudfront_function" "secplus_apex_host_check" {
+  name    = "secplus-apex-host-check"
+  runtime = "cloudfront-js-2.0"
+  comment = "Only serve ${var.secplus_apex_domain}"
+  publish = true
+
+  code = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      var host = request.headers.host ? request.headers.host.value.toLowerCase() : "";
+      if (host !== "${lower(var.secplus_apex_domain)}") {
+        return { statusCode: 403, statusDescription: "Forbidden" };
+      }
+      return request;
+    }
+  EOT
+}
+
+resource "aws_cloudfront_distribution" "secplus_apex" {
+  comment         = "For TurboCerts home site"
+  enabled         = true
+  is_ipv6_enabled = true
+  price_class     = "PriceClass_100"
+  aliases         = [var.secplus_apex_domain]
+
+  origin {
+    origin_id   = "secplus-lb"
+    domain_name = var.secplus_origin_domain
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = random_password.secplus_origin_verify.result
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "secplus-lb"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.secplus_apex_host_check.arn
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = aws_acm_certificate.turbocerts_apex.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+}
