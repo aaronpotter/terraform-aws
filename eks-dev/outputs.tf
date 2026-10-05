@@ -42,3 +42,8 @@ output "secplus_db_secret_name" {
   description = "Secrets Manager secret (value set out-of-band) holding the Security+ exam's DB login; the chart's db.secretId."
   value       = aws_secretsmanager_secret.secplus_db_user.name
 }
+
+output "awsdevops_db_secret_name" {
+  description = "Secrets Manager secret (value set out-of-band) holding the AWS DevOps exam's DB login; the chart's db.secretId."
+  value       = aws_secretsmanager_secret.awsdevops_db_user.name
+}

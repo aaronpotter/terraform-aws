@@ -153,3 +153,21 @@ variable "secplus_deploy_role_arn" {
   type        = string
   default     = "arn:aws:iam::549610932637:role/github-actions-secplus-deploy"
 }
+
+variable "awsdevops_service_account" {
+  description = "ServiceAccount the AWS DevOps exam pods run as (created by its Helm chart). Pod Identity maps it to a role that reads only that app's secret."
+  type        = string
+  default     = "aws-devops-exam"
+}
+
+variable "awsdevops_migrate_service_account" {
+  description = "ServiceAccount the AWS DevOps exam's migration Job runs as (created by its chart). Reads the master DB secret to create the app's database and role."
+  type        = string
+  default     = "aws-devops-exam-migrate"
+}
+
+variable "awsdevops_deploy_role_arn" {
+  description = "IAM role the AWS DevOps exam repo's workflow uses for helm (created in apps/awsdevops.tf); gets edit access in app_namespace only. Set to null to remove the access entry."
+  type        = string
+  default     = "arn:aws:iam::549610932637:role/github-actions-awsdevops-deploy"
+}

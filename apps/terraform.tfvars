@@ -10,3 +10,7 @@ secplus_domain = "securityplus.turbocerts.com"
 
 # Apex served by its own distribution (E19LJGLXCXBSC9, imported). DNS (Cloudflare) CNAMEs it to that distribution.
 secplus_apex_domain = "turbocerts.com"
+
+# AWS DevOps exam repo, pinned by immutable owner and repo IDs. Creates the push (main only) and
+# deploy (environment:production only) roles.
+awsdevops_github_subjects = ["repo:aaronpotter@9371584/aws-devops-exam@1406147538"]

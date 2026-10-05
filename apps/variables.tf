@@ -26,3 +26,9 @@ variable "secplus_apex_domain" {
   type        = string
   default     = ""
 }
+
+variable "awsdevops_github_subjects" {
+  description = "GitHub OIDC subject prefixes of the AWS DevOps exam repo, pinned by immutable IDs, e.g. [\"repo:aaronpotter@<owner id>/<repo>@<repo id>\"]. The CI roles are created only when set."
+  type        = list(string)
+  default     = []
+}
