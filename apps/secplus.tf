@@ -284,10 +284,13 @@ resource "aws_cloudfront_distribution" "secplus" {
 }
 
 # ------------------------------------------------------------------
-# Apex domain (turbocerts.com): second distribution, same origin
+# Apex domain (turbocerts.com): the TurboCerts landing page
 # ------------------------------------------------------------------
-# Created by hand in the console ("For TurboCerts home site"), then imported here and brought in line
-# with the subdomain distribution: HTTP to the origin, X-Origin-Verify header, no caching, Host check.
+# Created by hand in the console ("For TurboCerts home site"), then imported here. It first served the
+# Security+ app; it now serves the static landing page from the S3 bucket in turbocerts_home.tf (Origin
+# Access Control, cached), and a CloudFront Function redirects the old Security+ study-guide URLs to
+# securityplus.turbocerts.com. The resource names below still say "secplus_apex" to keep the existing
+# distribution and function in place (renaming the function would replace it while it is attached).
 # CloudFront takes one certificate per distribution, so the apex has its own (the wildcard above does
 # not cover it). Both are created and validated by hand and imported.
 
@@ -316,7 +319,7 @@ import {
 resource "aws_cloudfront_function" "secplus_apex_host_check" {
   name    = "secplus-apex-host-check"
   runtime = "cloudfront-js-2.0"
-  comment = "Only serve ${var.secplus_apex_domain}"
+  comment = "Only serve ${var.secplus_apex_domain}; redirect old Security+ study guides to ${var.secplus_domain}"
   publish = true
 
   code = <<-EOT
@@ -326,49 +329,62 @@ resource "aws_cloudfront_function" "secplus_apex_host_check" {
       if (host !== "${lower(var.secplus_apex_domain)}") {
         return { statusCode: 403, statusDescription: "Forbidden" };
       }
+      // The Security+ study guides used to live on the apex (study.html, study-<topic>.html).
+      if (/^\/study[^\/]*\.html$/.test(request.uri)) {
+        return {
+          statusCode: 301,
+          statusDescription: "Moved Permanently",
+          headers: { location: { value: "https://${lower(var.secplus_domain)}" + request.uri } }
+        };
+      }
       return request;
     }
   EOT
 }
 
 resource "aws_cloudfront_distribution" "secplus_apex" {
-  comment         = "For TurboCerts home site"
-  enabled         = true
-  is_ipv6_enabled = true
-  price_class     = "PriceClass_100"
-  aliases         = [var.secplus_apex_domain]
+  comment             = "TurboCerts home (static landing page)"
+  enabled             = true
+  is_ipv6_enabled     = true
+  price_class         = "PriceClass_100"
+  aliases             = [var.secplus_apex_domain]
+  default_root_object = "index.html"
 
   origin {
-    origin_id   = "secplus-lb"
-    domain_name = var.secplus_origin_domain
-
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
-
-    custom_header {
-      name  = "X-Origin-Verify"
-      value = random_password.secplus_origin_verify.result
-    }
+    origin_id                = "turbocerts-home-s3"
+    domain_name              = aws_s3_bucket.turbocerts_home.bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.turbocerts_home.id
   }
 
   default_cache_behavior {
-    target_origin_id       = "secplus-lb"
+    target_origin_id       = "turbocerts-home-s3"
     viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
     compress               = true
 
-    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    # Files change only on deploy, which invalidates the distribution.
+    cache_policy_id = data.aws_cloudfront_cache_policy.caching_optimized.id
 
     function_association {
       event_type   = "viewer-request"
       function_arn = aws_cloudfront_function.secplus_apex_host_check.arn
     }
+  }
+
+  # A private bucket answers 403 (not 404) for a missing object.
+  custom_error_response {
+    error_code            = 403
+    response_code         = 404
+    response_page_path    = "/404.html"
+    error_caching_min_ttl = 60
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 404
+    response_page_path    = "/404.html"
+    error_caching_min_ttl = 60
   }
 
   restrictions {
