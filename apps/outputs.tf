@@ -57,3 +57,18 @@ output "awsdevops_origin_verify_secret_name" {
   description = "Secrets Manager secret with the raw X-Origin-Verify value for the AWS DevOps exam; the chart's originVerify.secretId."
   value       = aws_secretsmanager_secret.awsdevops_origin_verify.name
 }
+
+output "turbocerts_home_bucket" {
+  description = "S3 bucket holding the turbocerts.com landing page; the turbocerts-home repo's S3_BUCKET variable."
+  value       = aws_s3_bucket.turbocerts_home.id
+}
+
+output "turbocerts_apex_distribution_id" {
+  description = "ID of the apex (turbocerts.com) CloudFront distribution; the turbocerts-home repo's CLOUDFRONT_DISTRIBUTION_ID variable."
+  value       = aws_cloudfront_distribution.secplus_apex.id
+}
+
+output "turbocerts_home_deploy_role_arn" {
+  description = "Role the turbocerts-home repo assumes to deploy."
+  value       = one(aws_iam_role.turbocerts_home_deploy[*].arn)
+}

@@ -20,3 +20,6 @@ awsdevops_origin_domain = "a86e1c3a2501d4d489990b1ad1263bb0-2030875125.us-east-2
 
 # The only hostname the AWS DevOps exam answers to. DNS (Cloudflare) CNAMEs it to the distribution.
 awsdevops_domain = "awsdevops.turbocerts.com"
+
+# turbocerts-home repo (the turbocerts.com landing page), pinned by immutable owner and repo IDs.
+turbocerts_home_github_subjects = ["repo:aaronpotter@9371584/turbocerts-home@1406306179"]
