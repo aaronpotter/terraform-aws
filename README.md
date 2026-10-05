@@ -73,7 +73,7 @@ kubectl run psql --rm -it --restart=Never --image=postgres:18 --env=PGPASSWORD="
 
 ### App access (`eks-dev/app_access.tf`)
 
-Shared cluster access, plus the Security+ exam's own roles and secrets in `eks-dev/secplus.tf`. Everything tied to the cluster exists only while `enabled = true`.
+Shared cluster access, plus the Security+ exam's own roles and secrets in `eks-dev/secplus.tf` and the AWS DevOps exam's in `eks-dev/awsdevops.tf` (secret `apotterlab-postgres-awsdevops-user`, value set out-of-band like the Security+ one; Pod Identity roles for `aws-devops-exam` and `aws-devops-exam-migrate`; edit access for its deploy role). The AWS DevOps exam has no CloudFront distribution or origin-verify secret yet. Everything tied to the cluster exists only while `enabled = true`.
 
 | Piece | Details |
 |---|---|
@@ -137,6 +137,9 @@ Resources that were first created by hand, and brought under Terraform with `imp
 | ECR `security-plus-exam` (`secplus.tf`) | Immutable tags, scan on push. A lifecycle policy keeps the 20 newest **tagged** images. Untagged images stay, because they're the manifests inside multi-arch indexes. Pushed by the app repo's build job. |
 | Role `github-actions-secplus-ecr-push` | Build job for `aaronpotter/securityplus-exam`, trusted only for `ref:refs/heads/main`. It can push to and read `security-plus-exam` only (plus `ecr:GetAuthorizationToken`). Created once `secplus_github_subjects` is set. |
 | Role `github-actions-secplus-deploy` | Deploy job for `aaronpotter/securityplus-exam`: `eks:DescribeCluster`, plus namespace-scoped edit in the cluster (see eks-dev). Trust is pinned to the repo's IDs and **only** `environment:production`. |
+| ECR `aws-devops-exam` (`awsdevops.tf`) | Same settings as the Security+ repo: immutable tags, scan on push, keeps the 20 newest tagged images. Pushed by the `aaronpotter/aws-devops-exam` build job. |
+| Role `github-actions-awsdevops-ecr-push` | Build job for `aaronpotter/aws-devops-exam`, trusted only for `ref:refs/heads/main`; push and read on `aws-devops-exam` only. Created once `awsdevops_github_subjects` is set. |
+| Role `github-actions-awsdevops-deploy` | Deploy job for `aaronpotter/aws-devops-exam`: `eks:DescribeCluster`, plus namespace-scoped edit (see eks-dev). Trust pinned to the repo's IDs and **only** `environment:production`. |
 
 **CloudFront** (`secplus.tf`): the Security+ exam is served at the `secplus_cloudfront_domain_name` output over HTTPS (default `*.cloudfront.net` certificate, `PriceClass_100`, IPv6, never cached, all methods allowed). It exists only while `secplus_origin_domain` is set. CloudFront forwards to the Kubernetes-created load balancer (`secplus_origin_domain` in `apps/terraform.tfvars`) and adds an `X-Origin-Verify` header that the app requires, so the load balancer can't be used directly.
 - The header value is a `random_password`, stored in Secrets Manager as `apotterlab-secplus-origin-verify` (the raw value, not JSON). The app reads it through its Pod Identity role. It's also in CloudFront's config, so it's in **apps state**. Plans show it as sensitive.

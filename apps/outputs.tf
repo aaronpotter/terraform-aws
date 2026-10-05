@@ -32,3 +32,18 @@ output "secplus_origin_verify_secret_name" {
   description = "Secrets Manager secret with the raw X-Origin-Verify value for the Security+ exam."
   value       = aws_secretsmanager_secret.secplus_origin_verify.name
 }
+
+output "awsdevops_repository_url" {
+  description = "ECR repository URL for the AWS DevOps exam image."
+  value       = aws_ecr_repository.aws_devops_exam.repository_url
+}
+
+output "awsdevops_deploy_role_arn" {
+  description = "Role the AWS DevOps exam repo assumes to deploy; pass to eks-dev as awsdevops_deploy_role_arn."
+  value       = one(aws_iam_role.awsdevops_deploy[*].arn)
+}
+
+output "awsdevops_ecr_push_role_arn" {
+  description = "Role the AWS DevOps exam build job assumes to push images."
+  value       = one(aws_iam_role.awsdevops_ecr_push[*].arn)
+}
