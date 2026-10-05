@@ -2,9 +2,7 @@
 # CloudFront distribution through Origin Access Control. Uploaded by the aaronpotter/turbocerts-home
 # repo's workflow.
 #
-# This file only creates the bucket, access and deploy role. The apex distribution
-# (aws_cloudfront_distribution.secplus_apex in secplus.tf) keeps serving the Security+ app until a
-# separate change points its origin at this bucket.
+# The apex distribution (aws_cloudfront_distribution.secplus_apex in secplus.tf) serves this bucket.
 
 resource "aws_s3_bucket" "turbocerts_home" {
   bucket = "apotter-turbocerts-home"
@@ -147,4 +145,8 @@ resource "aws_iam_role_policy" "turbocerts_home_deploy" {
       },
     ]
   })
+}
+
+data "aws_cloudfront_cache_policy" "caching_optimized" {
+  name = "Managed-CachingOptimized"
 }
