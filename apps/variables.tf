@@ -49,3 +49,9 @@ variable "awsdevops_domain" {
   type        = string
   default     = ""
 }
+
+variable "turbocerts_home_github_subjects" {
+  description = "GitHub OIDC subject prefixes of the turbocerts-home repo, pinned by immutable IDs, e.g. [\"repo:aaronpotter@<owner id>/<repo>@<repo id>\"]. The deploy role is created only when set."
+  type        = list(string)
+  default     = []
+}
