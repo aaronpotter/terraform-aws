@@ -32,3 +32,20 @@ variable "awsdevops_github_subjects" {
   type        = list(string)
   default     = []
 }
+
+variable "awsdevops_origin_domain" {
+  description = "Hostname of the load balancer Kubernetes created for Service production/aws-devops-exam. Empty until the first helm install; then: kubectl -n production get svc aws-devops-exam -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'. Changes whenever the cluster is recreated."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.awsdevops_origin_domain == "" || endswith(var.awsdevops_origin_domain, ".elb.amazonaws.com")
+    error_message = "awsdevops_origin_domain must be empty or the Service's load balancer hostname (*.elb.amazonaws.com)."
+  }
+}
+
+variable "awsdevops_domain" {
+  description = "The only hostname the AWS DevOps exam is served on, e.g. awsdevops.turbocerts.com. It becomes the distribution's alias (using the imported *.turbocerts.com certificate), and a CloudFront Function returns 403 for any other Host, including the default *.cloudfront.net name. Empty serves the default cloudfront.net name with no restriction."
+  type        = string
+  default     = ""
+}

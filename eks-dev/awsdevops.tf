@@ -1,6 +1,6 @@
 # Access for the AWS DevOps exam app (Node.js + PostgreSQL), a Helm release in app_namespace.
 # Same model as secplus.tf: its own database, DB role, secret and roles; shares only the RDS
-# instance and the namespace with the other apps. No origin-verify secret (no CloudFront yet).
+# instance and the namespace with the other apps.
 #
 # Bootstrapping inside PostgreSQL is not Terraform's job (RDS is private): the chart's migration Job,
 # running as the master user, creates database "awsdevops" and role "awsdevops_user" from the secret
@@ -25,7 +25,7 @@ resource "aws_secretsmanager_secret" "awsdevops_db_user" {
 
 resource "aws_iam_role" "awsdevops_app" {
   name        = "${var.cluster_name}-${var.awsdevops_service_account}-secrets"
-  description = "Pod Identity role for ${var.app_namespace}/${var.awsdevops_service_account}: read its own DB login secret."
+  description = "Pod Identity role for ${var.app_namespace}/${var.awsdevops_service_account}: read its own DB login and origin-verify secrets."
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -44,9 +44,13 @@ resource "aws_iam_role_policy" "awsdevops_app" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = "secretsmanager:GetSecretValue"
-      Resource = [aws_secretsmanager_secret.awsdevops_db_user.arn]
+      Effect = "Allow"
+      Action = "secretsmanager:GetSecretValue"
+      Resource = [
+        aws_secretsmanager_secret.awsdevops_db_user.arn,
+        # Created in apps/ (awsdevops.tf); matched by pattern to avoid a cross-stack dependency.
+        "arn:aws:secretsmanager:us-east-2:${data.aws_caller_identity.current.account_id}:secret:apotterlab-awsdevops-origin-verify-??????",
+      ]
     }]
   })
 }

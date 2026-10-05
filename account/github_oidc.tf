@@ -70,13 +70,16 @@ data "aws_iam_policy_document" "terraform_plan_state_lock" {
     resources = ["${local.state_bucket_arn}/*.tflock"]
   }
 
-  # apps/ manages the Security+ exam's origin-verify value (it must also sit in CloudFront's config), and refreshing a
-  # secret version calls GetSecretValue. The value is already in apps state, which this role can
+  # apps/ manages the Security+ and AWS DevOps exams' origin-verify values (each must also sit in CloudFront's config),
+  # and refreshing a secret version calls GetSecretValue. The values are already in apps state, which this role can
   # read, so this adds no exposure. No other secret is readable.
   statement {
-    sid       = "RefreshOriginVerifySecret"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = ["arn:aws:secretsmanager:us-east-2:${local.account_id}:secret:apotterlab-secplus-origin-verify-??????"]
+    sid     = "RefreshOriginVerifySecret"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      "arn:aws:secretsmanager:us-east-2:${local.account_id}:secret:apotterlab-secplus-origin-verify-??????",
+      "arn:aws:secretsmanager:us-east-2:${local.account_id}:secret:apotterlab-awsdevops-origin-verify-??????",
+    ]
   }
 }
 

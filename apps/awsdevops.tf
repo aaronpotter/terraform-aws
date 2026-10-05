@@ -140,3 +140,110 @@ resource "aws_iam_role_policy" "awsdevops_deploy_eks_describe" {
     }]
   })
 }
+
+# ------------------------------------------------------------------
+# CloudFront (created only once the app's load balancer exists)
+# ------------------------------------------------------------------
+# The Service's load balancer is created by Kubernetes on first deploy, so its hostname is an input
+# (var.awsdevops_origin_domain). Same setup as the Security+ exam: HTTP to the origin with an
+# X-Origin-Verify header the app checks, no caching, and a Host check so only the custom domain works.
+# The *.turbocerts.com certificate (secplus.tf) covers the domain.
+
+resource "random_password" "awsdevops_origin_verify" {
+  length  = 48
+  special = false
+}
+
+# Raw header value (not JSON), read at runtime by the app pods. The name matches the pattern the
+# terraform-plan role (account/github_oidc.tf) and the app's Pod Identity role (eks-dev/awsdevops.tf) allow.
+resource "aws_secretsmanager_secret" "awsdevops_origin_verify" {
+  name        = "apotterlab-awsdevops-origin-verify"
+  description = "Raw X-Origin-Verify header value CloudFront sends to the AWS DevOps exam load balancer (not JSON)."
+}
+
+resource "aws_secretsmanager_secret_version" "awsdevops_origin_verify" {
+  secret_id     = aws_secretsmanager_secret.awsdevops_origin_verify.id
+  secret_string = random_password.awsdevops_origin_verify.result
+}
+
+resource "aws_cloudfront_function" "awsdevops_host_check" {
+  count = var.awsdevops_domain != "" ? 1 : 0
+
+  name    = "awsdevops-host-check"
+  runtime = "cloudfront-js-2.0"
+  comment = "Only serve ${var.awsdevops_domain}"
+  publish = true
+
+  code = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      var host = request.headers.host ? request.headers.host.value.toLowerCase() : "";
+      if (host !== "${lower(var.awsdevops_domain)}") {
+        return { statusCode: 403, statusDescription: "Forbidden" };
+      }
+      return request;
+    }
+  EOT
+}
+
+resource "aws_cloudfront_distribution" "awsdevops" {
+  count = var.awsdevops_origin_domain != "" ? 1 : 0
+
+  comment         = "AWS DevOps practice exam via the EKS Service load balancer"
+  enabled         = true
+  is_ipv6_enabled = true
+  price_class     = "PriceClass_100"
+  aliases         = var.awsdevops_domain != "" ? [var.awsdevops_domain] : []
+
+  origin {
+    origin_id   = "awsdevops-lb"
+    domain_name = var.awsdevops_origin_domain
+
+    # The in-tree Service LB listens on HTTP only, so the CloudFront-to-origin hop (and this header)
+    # is unencrypted. Viewers always get HTTPS.
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = random_password.awsdevops_origin_verify.result
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "awsdevops-lb"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+
+    # Exam attempts are per-user API responses and must never be cached.
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+
+    dynamic "function_association" {
+      for_each = var.awsdevops_domain != "" ? [1] : []
+      content {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.awsdevops_host_check[0].arn
+      }
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = var.awsdevops_domain != "" ? null : true
+    acm_certificate_arn            = var.awsdevops_domain != "" ? aws_acm_certificate.turbocerts.arn : null
+    ssl_support_method             = var.awsdevops_domain != "" ? "sni-only" : null
+    minimum_protocol_version       = var.awsdevops_domain != "" ? "TLSv1.2_2021" : null
+  }
+}

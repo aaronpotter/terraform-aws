@@ -47,3 +47,13 @@ output "awsdevops_ecr_push_role_arn" {
   description = "Role the AWS DevOps exam build job assumes to push images."
   value       = one(aws_iam_role.awsdevops_ecr_push[*].arn)
 }
+
+output "awsdevops_cloudfront_domain_name" {
+  description = "CloudFront domain for the AWS DevOps exam; the Cloudflare CNAME target for awsdevops_domain. Null until awsdevops_origin_domain is set."
+  value       = one(aws_cloudfront_distribution.awsdevops[*].domain_name)
+}
+
+output "awsdevops_origin_verify_secret_name" {
+  description = "Secrets Manager secret with the raw X-Origin-Verify value for the AWS DevOps exam; the chart's originVerify.secretId."
+  value       = aws_secretsmanager_secret.awsdevops_origin_verify.name
+}
