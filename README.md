@@ -73,7 +73,7 @@ kubectl run psql --rm -it --restart=Never --image=postgres:18 --env=PGPASSWORD="
 
 ### App access (`eks-dev/app_access.tf`)
 
-Shared cluster access, plus the Security+ exam's own roles and secrets in `eks-dev/secplus.tf` and the AWS DevOps exam's in `eks-dev/awsdevops.tf` (secret `apotterlab-postgres-awsdevops-user`, value set out-of-band like the Security+ one; Pod Identity roles for `aws-devops-exam` and `aws-devops-exam-migrate`; edit access for its deploy role). The AWS DevOps exam has no CloudFront distribution or origin-verify secret yet. Everything tied to the cluster exists only while `enabled = true`.
+Shared cluster access, plus the Security+ exam's own roles and secrets in `eks-dev/secplus.tf` and the AWS DevOps exam's in `eks-dev/awsdevops.tf` (secret `apotterlab-postgres-awsdevops-user`, value set out-of-band like the Security+ one; Pod Identity roles for `aws-devops-exam` and `aws-devops-exam-migrate`; edit access for its deploy role). Its app role also reads the origin-verify secret created in `apps/awsdevops.tf`. Everything tied to the cluster exists only while `enabled = true`.
 
 | Piece | Details |
 |---|---|
@@ -145,6 +145,8 @@ Resources that were first created by hand, and brought under Terraform with `imp
 - The header value is a `random_password`, stored in Secrets Manager as `apotterlab-secplus-origin-verify` (the raw value, not JSON). The app reads it through its Pod Identity role. It's also in CloudFront's config, so it's in **apps state**. Plans show it as sensitive.
 - **After recreating the cluster**, the load balancer hostname changes. Update `secplus_origin_domain` in `apps/terraform.tfvars` (`kubectl -n production get svc security-plus-exam -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'`) and apply. Until then, CloudFront returns 502/504.
 - The CloudFront-to-load-balancer hop is unencrypted, including the header, because the in-tree load balancer only listens on HTTP.
+
+The AWS DevOps exam (`awsdevops.tf`) has the same setup at `awsdevops_domain` (`awsdevops.turbocerts.com`, covered by the `*.turbocerts.com` certificate): its own distribution, Host check function and origin-verify secret `apotterlab-awsdevops-origin-verify`. Set `awsdevops_origin_domain` (`kubectl -n production get svc aws-devops-exam ...`) after the first deploy and after any cluster recreate. DNS (Cloudflare) CNAMEs the name to the `awsdevops_cloudfront_domain_name` output. The app repo's `ORIGIN_VERIFY_SECRET_ID` Actions variable (production environment) makes the app require the header.
 
 **CI** (`terraform-apps.yaml`): same flow as the root module. `Apps Plan` runs on PRs with the read-only role in `production-plan`. On merge, `Terraform Apply - Apps` waits for approval in `production`. If a merge doesn't start a run, run the workflow manually from `main` with `action: apply`. The Lambda zip is built during plan and uploaded with the saved plan, so the apply deploys exactly what was planned. Drift detection covers this stack too.
 
