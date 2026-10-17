@@ -1,6 +1,6 @@
 # terraform-aws
 
-A production VPC (root module), an on-demand EKS dev cluster with PostgreSQL (`eks-dev/`), app resources (`apps/`), and account guardrails (`account/`), with Terraform state in S3.
+An on-demand EKS dev cluster with PostgreSQL (`eks-dev/`), app resources (`apps/`), and account guardrails (`account/`), with Terraform state in S3.
 
 ## First-time setup
 

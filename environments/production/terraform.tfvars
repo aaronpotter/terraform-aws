@@ -1,3 +1,1 @@
-instance_name      = "terraform-lab-prod"
-vpc_cidr           = "10.1.0.0/16"
-public_subnet_cidr = "10.1.1.0/24"
+# The root stack manages no resources, so it takes no variables.
