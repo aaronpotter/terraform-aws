@@ -8,7 +8,7 @@ this file covers how to work here safely.
 
 | Dir | What | State key | Applied by |
 |---|---|---|---|
-| `.` (root) | Production VPC only (the EC2 instance was removed) | `environments/production/...` via `-backend-config=environments/production/backend.tfvars` | CI on merge (`terraform.yaml`), approval in `production` |
+| `.` (root) | Empty (the production VPC and EC2 instance were removed); kept for the provider and state | `environments/production/...` via `-backend-config=environments/production/backend.tfvars` | CI on merge (`terraform.yaml`), approval in `production` |
 | `eks-dev/` | EKS cluster `apotterlab` (`enabled` switch in `terraform.tfvars`), RDS `apotterlab-postgres`, `production` namespace, Pod Identity, access entries, Security+ app roles/secrets (`secplus.tf`) | `environments/eks-dev/...` | CI, **manual** dispatch `action: apply` from `main` (`eks-dev-apply`, no approval) |
 | `apps/` | Lambda `s3-trigger-unzip` + 3 buckets, ECR `security-plus-exam`, Security+ CI roles and CloudFront (`secplus.tf`). AWS provider **6.x** (others 5.x) | `environments/apps/...` | CI on merge (`terraform-apps.yaml`), approval in `production` |
 | `account/` | CloudTrail, GitHub OIDC + `terraform-plan`/`terraform-apply` roles, `Engineers` group, `break-glass-admin`, alert rules | `account/...` | **Human only, with break-glass.** CI never plans or applies it |
