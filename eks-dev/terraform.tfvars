@@ -5,7 +5,7 @@
 # load balancers while the cluster is up), then enabled = false. To turn on, set BOTH to true.
 enabled = true
 
-app_namespace_enabled = true
+app_namespace_enabled = false
 
 cluster_name = "apotterlab"
 # Free plan accounts reject non-free-tier types (t3.medium fails with InvalidParameterCombination).
