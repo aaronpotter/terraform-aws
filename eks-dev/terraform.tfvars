@@ -3,7 +3,7 @@
 # The on/off switch: false removes the cluster and node group (~$3.10/day), true brings them back.
 # Turning off takes two applies: app_namespace_enabled = false first (deletes the namespace and its
 # load balancers while the cluster is up), then enabled = false. To turn on, set BOTH to true.
-enabled = true
+enabled = false
 
 app_namespace_enabled = true
 
