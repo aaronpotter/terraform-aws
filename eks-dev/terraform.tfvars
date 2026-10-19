@@ -7,6 +7,10 @@ enabled = false
 
 app_namespace_enabled = false
 
+# While the database is stopped on purpose, stop it again each time RDS auto-restarts it (7 days).
+# Set false before reusing the database.
+db_auto_stop = true
+
 cluster_name = "apotterlab"
 # Free plan accounts reject non-free-tier types (t3.medium fails with InvalidParameterCombination).
 # t3.small: 2 GiB, 11 pods max; 4 go to system pods.

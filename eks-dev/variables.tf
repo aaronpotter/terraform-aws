@@ -171,3 +171,9 @@ variable "awsdevops_deploy_role_arn" {
   type        = string
   default     = "arn:aws:iam::549610932637:role/github-actions-awsdevops-deploy"
 }
+
+variable "db_auto_stop" {
+  description = "Stop the database again whenever RDS restarts it after 7 days stopped. Set true only while the database is stopped on purpose."
+  type        = bool
+  default     = false
+}
