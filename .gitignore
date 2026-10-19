@@ -18,3 +18,4 @@ account/local.auto.tfvars
 
 # Lambda packages built by archive_file during plan
 apps/build/
+eks-dev/build/

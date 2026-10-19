@@ -100,3 +100,122 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.cluster_name}-postgres-final"
 }
+
+# ------------------------------------------------------------------
+# Keep the database stopped while it is unused
+# ------------------------------------------------------------------
+
+# RDS starts a stopped instance again after 7 days. This stops it again right after that automatic
+# start (RDS-EVENT-0154 for instances, 0153 for clusters). A start you do yourself raises a different
+# event, so reusing the database is unaffected. Set db_auto_stop = false to remove the guard.
+
+data "archive_file" "rds_restop" {
+  count = var.db_auto_stop ? 1 : 0
+
+  type        = "zip"
+  source_file = "${path.module}/lambda/rds-restop/lambda_function.py"
+  output_path = "${path.module}/build/rds-restop.zip"
+}
+
+resource "aws_iam_role" "rds_restop" {
+  count = var.db_auto_stop ? 1 : 0
+
+  name = "${var.cluster_name}-rds-restop"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "rds_restop" {
+  count = var.db_auto_stop ? 1 : 0
+
+  name = "stop-${var.cluster_name}-postgres"
+  role = aws_iam_role.rds_restop[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["rds:DescribeDBInstances", "rds:StopDBInstance"]
+        Resource = aws_db_instance.main.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "${aws_cloudwatch_log_group.rds_restop[0].arn}:*"
+      },
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "rds_restop" {
+  count = var.db_auto_stop ? 1 : 0
+
+  name              = "/aws/lambda/${var.cluster_name}-rds-restop"
+  retention_in_days = 30
+}
+
+resource "aws_lambda_function" "rds_restop" {
+  count = var.db_auto_stop ? 1 : 0
+
+  function_name    = "${var.cluster_name}-rds-restop"
+  role             = aws_iam_role.rds_restop[0].arn
+  handler          = "lambda_function.lambda_handler"
+  runtime          = "python3.13"
+  architectures    = ["x86_64"]
+  memory_size      = 128
+  timeout          = 900
+  filename         = data.archive_file.rds_restop[0].output_path
+  source_code_hash = data.archive_file.rds_restop[0].output_base64sha256
+
+  environment {
+    variables = {
+      DB_INSTANCE_ID = aws_db_instance.main.identifier
+    }
+  }
+
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.rds_restop[0].name
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "rds_auto_start" {
+  count = var.db_auto_stop ? 1 : 0
+
+  name        = "${var.cluster_name}-rds-auto-start"
+  description = "RDS restarted ${var.cluster_name}-postgres after its maximum 7 days stopped"
+
+  event_pattern = jsonencode({
+    source      = ["aws.rds"]
+    detail-type = ["RDS DB Instance Event"]
+    detail = {
+      SourceIdentifier = [aws_db_instance.main.identifier]
+      EventID          = ["RDS-EVENT-0153", "RDS-EVENT-0154"]
+    }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "rds_restop" {
+  count = var.db_auto_stop ? 1 : 0
+
+  rule = aws_cloudwatch_event_rule.rds_auto_start[0].name
+  arn  = aws_lambda_function.rds_restop[0].arn
+}
+
+resource "aws_lambda_permission" "rds_restop" {
+  count = var.db_auto_stop ? 1 : 0
+
+  statement_id  = "AllowEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.rds_restop[0].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.rds_auto_start[0].arn
+}
