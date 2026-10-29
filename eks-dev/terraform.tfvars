@@ -3,13 +3,13 @@
 # The on/off switch: false removes the cluster and node group (~$3.10/day), true brings them back.
 # Turning off takes two applies: app_namespace_enabled = false first (deletes the namespace and its
 # load balancers while the cluster is up), then enabled = false. To turn on, set BOTH to true.
-enabled = false
+enabled = true
 
-app_namespace_enabled = false
+app_namespace_enabled = true
 
 # While the database is stopped on purpose, stop it again each time RDS auto-restarts it (7 days).
 # Set false before reusing the database.
-db_auto_stop = true
+db_auto_stop = false
 
 cluster_name = "apotterlab"
 # Free plan accounts reject non-free-tier types (t3.medium fails with InvalidParameterCombination).
